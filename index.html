@@ -197,7 +197,7 @@ table.gl td{padding:8px; border-bottom:1px solid var(--line); vertical-align:top
 /* =====================================================
    データ定義（教材ソース：仕様書5章より。話者・拠点は匿名化済み）
 ===================================================== */
-const SCENES = ["PO・発注","要員計画","予算・請求","スケジュール調整","理解確認","リリース報告","課題共有","環境構築依頼","トレーニング","コスト見積"];
+const SCENES = ["会議進行","PO・発注","要員計画","予算・請求","スケジュール調整","理解確認","リリース報告","課題共有","品質・テスト","リスク管理","要件・仕様","環境構築依頼","トレーニング","コスト見積"];
 
 const PHRASES = [
  {id:"p1", en:"Maybe the PO will be issued in the third week of July.", ja:"POは7月第3週に発行されるかもしれません。", scene:"PO・発注", sp:"Aさん", date:"2026-06-10",
@@ -242,6 +242,96 @@ const PHRASES = [
  {id:"p14", en:"I will inform them of the current situation.", ja:"現状を彼らに伝えます。", scene:"課題共有", sp:"Bさん", date:"2026-06-17",
   bg:"会議で決まった内容を関係者へ展開すると引き取った場面。",
   sim:["I will pass this on to the team.","Let me update them on the status.","I will share the current status with them."]},
+ /* ===== 会議進行 ===== */
+ {id:"p15", en:"Let's get started since everyone is here.", ja:"全員そろったので始めましょう。", scene:"会議進行", sp:"Aさん", date:"2026-06-03",
+  bg:"週次進捗会議の冒頭。定刻に開始を宣言した場面。",
+  sim:["Shall we begin?","Let's kick off the meeting.","Since we are all here, let's start."]},
+ {id:"p16", en:"Can everyone see my screen?", ja:"皆さん、私の画面は見えていますか？", scene:"会議進行", sp:"Bさん", date:"2026-06-03",
+  bg:"オンライン会議で資料を画面共有した直後の確認。",
+  sim:["Is my screen visible?","Are you able to see the slide?","Let me share my screen."]},
+ {id:"p17", en:"Let's move on to the next agenda item.", ja:"次の議題に移りましょう。", scene:"会議進行", sp:"Aさん", date:"2026-06-10",
+  bg:"1つ目の議題が完了し、次に進めることを宣言した場面。",
+  sim:["Moving on to the next topic.","Let's proceed to item two.","Next, let's discuss the schedule."]},
+ {id:"p18", en:"We are running out of time, so let's take this offline.", ja:"時間がなくなってきたので、この件は別途相談しましょう。", scene:"会議進行", sp:"Cさん", date:"2026-06-17",
+  bg:"議論が長引いたため、会議後の個別調整に切り替えた場面。",
+  sim:["Let's discuss this separately after the meeting.","We can follow up on this offline.","Let's park this topic for now."]},
+ {id:"p19", en:"Let me summarize today's action items.", ja:"本日のアクションアイテムをまとめます。", scene:"会議進行", sp:"Aさん", date:"2026-06-24",
+  bg:"会議の締めで、決定事項と宿題を整理した場面。",
+  sim:["Let me recap the action items.","Here is the summary of today's decisions.","I will list the to-dos before we close."]},
+ {id:"p20", en:"Any questions so far?", ja:"ここまでで質問はありますか？", scene:"会議進行", sp:"Bさん", date:"2026-06-24",
+  bg:"説明の区切りごとに理解を確認する定番の問いかけ。",
+  sim:["Do you have any questions up to this point?","Is everything clear so far?","Feel free to interrupt if anything is unclear."]},
+ /* ===== 品質・テスト ===== */
+ {id:"p21", en:"The defect rate is within the acceptable range.", ja:"欠陥率は許容範囲内です。", scene:"品質・テスト", sp:"Cさん", date:"2026-06-10",
+  bg:"月次品質レビューで、品質指標の実績を報告した場面。",
+  sim:["The bug density meets the quality target.","Defects are under the threshold.","Quality metrics are within the standard."]},
+ {id:"p22", en:"We found three critical bugs during the integration test.", ja:"結合テストで重大なバグを3件検出しました。", scene:"品質・テスト", sp:"Bさん", date:"2026-06-17",
+  bg:"結合テストの結果報告。重大度の高い欠陥を共有した場面。",
+  sim:["Three severe defects were detected in IT phase.","We identified critical issues in the integration test.","There are three blocker bugs at the moment."]},
+ {id:"p23", en:"UAT will start next Monday as planned.", ja:"UATは予定どおり来週月曜に開始します。", scene:"品質・テスト", sp:"Aさん", date:"2026-06-24",
+  bg:"受入テストの開始時期を確定として周知した場面。",
+  sim:["The user acceptance test begins on Monday.","UAT kicks off next week as scheduled.","We are ready to start UAT on time."]},
+ {id:"p24", en:"Could you share the test evidence by tomorrow?", ja:"テストエビデンスを明日までに共有していただけますか？", scene:"品質・テスト", sp:"Cさん", date:"2026-07-01",
+  bg:"品質確認のため、テスト実施記録の提出を依頼した場面。",
+  sim:["Please submit the test results by tomorrow.","We need the evidence documents by EOD tomorrow.","Could you provide the test logs as well?"]},
+ /* ===== リスク管理 ===== */
+ {id:"p25", en:"This is a potential risk for the go-live schedule.", ja:"これは本番稼働スケジュールに対する潜在リスクです。", scene:"リスク管理", sp:"Aさん", date:"2026-06-10",
+  bg:"稼働時期に影響し得るリスクを早期に提起した場面。",
+  sim:["This may impact the go-live date.","It could be a risk to the cutover plan.","We should flag this as a schedule risk."]},
+ {id:"p26", en:"We need a mitigation plan for the resource shortage.", ja:"要員不足に対する軽減策が必要です。", scene:"リスク管理", sp:"Bさん", date:"2026-06-17",
+  bg:"要員リスクへの対応計画の作成を求めた場面。",
+  sim:["Please prepare a countermeasure for the staffing issue.","We need a backup plan for the manpower risk.","How do we mitigate this resource risk?"]},
+ {id:"p27", en:"Let's add this to the risk register.", ja:"これをリスク管理表に追加しましょう。", scene:"リスク管理", sp:"Cさん", date:"2026-06-24",
+  bg:"新たに認識したリスクの管理台帳への登録を指示した場面。",
+  sim:["Please record it in the risk list.","We should track this risk formally.","Add it to the issue and risk log."]},
+ /* ===== 要件・仕様 ===== */
+ {id:"p28", en:"The requirement is still ambiguous, so we need clarification.", ja:"要件がまだ曖昧なので、明確化が必要です。", scene:"要件・仕様", sp:"Bさん", date:"2026-05-27",
+  bg:"RAフェーズで、仕様の不明点を指摘した場面。",
+  sim:["We need to clarify this requirement.","The specification is not clear enough.","Could you elaborate on this requirement?"]},
+ {id:"p29", en:"Is this change within the current scope?", ja:"この変更は現行スコープの範囲内ですか？", scene:"要件・仕様", sp:"Aさん", date:"2026-06-03",
+  bg:"追加要望がスコープ内か契約変更かを確認した場面。",
+  sim:["Is it in scope or out of scope?","Does this require a change request?","Is this covered by the current contract?"]},
+ {id:"p30", en:"We should freeze the specification by the end of this month.", ja:"今月末までに仕様を凍結すべきです。", scene:"要件・仕様", sp:"Cさん", date:"2026-06-10",
+  bg:"手戻り防止のため、仕様確定の期限を提案した場面。",
+  sim:["Let's fix the spec by month-end.","No more changes after the spec freeze.","The design should be finalized this month."]},
+ /* ===== 進捗・スケジュール ===== */
+ {id:"p31", en:"The development is 80 percent complete as of today.", ja:"本日時点で開発は80％完了です。", scene:"リリース報告", sp:"Bさん", date:"2026-06-17",
+  bg:"週次会議での定量的な進捗報告。",
+  sim:["We are 80 percent done with development.","Progress stands at 80 percent today.","Coding is almost complete, at 80 percent."]},
+ {id:"p32", en:"There is a two-day delay due to the environment issue.", ja:"環境の問題により2日の遅延が発生しています。", scene:"スケジュール調整", sp:"Cさん", date:"2026-06-24",
+  bg:"遅延の事実と原因をセットで報告した場面。",
+  sim:["We are two days behind schedule.","The environment trouble caused a short delay.","There is a slight slippage of two days."]},
+ {id:"p33", en:"We can catch up by the end of next week.", ja:"来週末までに挽回できます。", scene:"スケジュール調整", sp:"Bさん", date:"2026-06-24",
+  bg:"遅延に対するリカバリの見込みを伝えた場面。",
+  sim:["We will recover the delay by next Friday.","The schedule will be back on track next week.","We expect to catch up soon."]},
+ {id:"p34", en:"The milestone review is scheduled for Friday.", ja:"マイルストーンレビューは金曜日に予定されています。", scene:"スケジュール調整", sp:"Aさん", date:"2026-07-01",
+  bg:"重要な節目レビューの日程を確認した場面。",
+  sim:["The phase-gate review is on Friday.","We will hold the milestone meeting this week.","Friday is the checkpoint review."]},
+ /* ===== PO・発注 / 要員 / 課題 / 理解確認 ===== */
+ {id:"p35", en:"Could you confirm the PO amount and the billing period?", ja:"POの金額と請求期間を確認していただけますか？", scene:"PO・発注", sp:"Bさん", date:"2026-06-03",
+  bg:"発注書ドラフトの内容確認を依頼した場面。",
+  sim:["Please double-check the PO value and billing term.","Can you verify the amount on the PO?","Is the billing period correct on this PO?"]},
+ {id:"p36", en:"We will send the official quotation by Wednesday.", ja:"正式な見積書を水曜日までにお送りします。", scene:"PO・発注", sp:"Cさん", date:"2026-06-10",
+  bg:"見積提出の期限をコミットした場面。",
+  sim:["The formal quote will be ready by Wednesday.","We will issue the quotation this week.","Expect the official estimation by midweek."]},
+ {id:"p37", en:"One senior engineer will join the team from August.", ja:"8月からシニアエンジニアが1名チームに参画します。", scene:"要員計画", sp:"Aさん", date:"2026-06-17",
+  bg:"体制強化の要員追加を報告した場面。",
+  sim:["A new senior member joins in August.","We are adding one experienced engineer.","The team will be reinforced from August."]},
+ {id:"p38", en:"We need to secure two more testers for UAT.", ja:"UATに向けてテスターをあと2名確保する必要があります。", scene:"要員計画", sp:"Bさん", date:"2026-06-24",
+  bg:"受入テストの体制不足を提起した場面。",
+  sim:["Two additional testers are required for UAT.","We are short of testing resources.","Please arrange two more QA members."]},
+ {id:"p39", en:"The root cause is still under investigation.", ja:"根本原因はまだ調査中です。", scene:"課題共有", sp:"Cさん", date:"2026-07-01",
+  bg:"障害の原因分析の状況を報告した場面。",
+  sim:["We are still analyzing the root cause.","The investigation is on-going.","We will report the cause by tomorrow."]},
+ {id:"p40", en:"Who will take ownership of this issue?", ja:"この課題のオーナーは誰になりますか？", scene:"課題共有", sp:"Aさん", date:"2026-07-01",
+  bg:"課題の担当者（責任者）を明確にするための問いかけ。",
+  sim:["Who is responsible for this item?","Can someone own this issue?","Please assign an owner to this task."]},
+ {id:"p41", en:"Could you elaborate on that point?", ja:"その点についてもう少し詳しく説明していただけますか？", scene:"理解確認", sp:"Bさん", date:"2026-06-10",
+  bg:"相手の説明の詳細を求めた場面。",
+  sim:["Could you give us more details?","Can you explain that further?","What exactly do you mean by that?"]},
+ {id:"p42", en:"Let me rephrase my question.", ja:"質問を言い換えます。", scene:"理解確認", sp:"Cさん", date:"2026-06-17",
+  bg:"質問が伝わらなかったため、別の表現で言い直した場面。",
+  sim:["Let me put it another way.","In other words, my question is this.","Let me ask it differently."]},
 ];
 
 /* F02: 重要単語（3階層） */
@@ -268,6 +358,16 @@ const TIER_WORDS = {
  "SystemX":{t:3, mean:"基幹システムX（仮称）", ex:"SystemX migration is in progress.", use:"移行プロジェクトの対象システム。"},
  "ToolY":{t:3, mean:"データ統合ツールY（仮称）", ex:"ToolY handles the data transfer.", use:"ETL処理の話題で登場。"},
  "ModuleZ":{t:3, mean:"生産管理モジュールZ（仮称）", ex:"ModuleZ will be released in Q4.", use:"生産管理系の開発話題で登場。"},
+ "action item":{t:2, mean:"アクションアイテム・宿題", ex:"Let me summarize the action items.", use:"会議の締めで決定事項・担当を整理する際に使用。"},
+ "root cause":{t:2, mean:"根本原因", ex:"The root cause is under investigation.", use:"障害・課題の原因分析で使用。"},
+ "milestone":{t:2, mean:"マイルストーン・節目", ex:"The milestone review is on Friday.", use:"工程の重要な節目・チェックポイントを指す。"},
+ "scope":{t:2, mean:"スコープ・作業範囲", ex:"Is this change within the scope?", use:"契約範囲内か追加費用かの議論で頻出。"},
+ "dependency":{t:2, mean:"依存関係", ex:"There is a dependency on the API team.", use:"タスク間・チーム間の前後関係を示す。"},
+ "go-live":{t:2, mean:"本番稼働", ex:"The go-live date is October 1st.", use:"システムの本番リリース時期を指す。"},
+ "mitigation":{t:2, mean:"（リスクの）軽減策", ex:"We need a mitigation plan.", use:"リスク対応策の議論で使用。"},
+ "defect":{t:2, mean:"欠陥・バグ", ex:"The defect rate is within the range.", use:"品質報告でbugよりフォーマルに使う。"},
+ "quotation":{t:2, mean:"見積書", ex:"We will send the official quotation.", use:"正式な見積文書を指す（quote とも）。"},
+ "UAT":{t:2, mean:"ユーザー受入テスト（User Acceptance Test）", ex:"UAT will start next Monday.", use:"発注側が実施する受入テスト工程。"},
 };
 
 /* F03: 定型句データベース */
@@ -284,6 +384,18 @@ const TEIKEI = [
  {id:"t10", scene:"要員計画", lv:"中級", en:"Do you have other concerns on the forecast manpower plan?", ja:"要員計画の見通しについて他に懸念はありますか？"},
  {id:"t11", scene:"コスト見積", lv:"上級", en:"Could you break down the estimation by phase?", ja:"見積をフェーズ別に分解していただけますか？"},
  {id:"t12", scene:"課題共有", lv:"上級", en:"We are exceeding budget, so we need to discuss countermeasures.", ja:"予算を超過しているため、対策を協議する必要があります。"},
+ {id:"t13", scene:"会議進行", lv:"初級", en:"Let's get started.", ja:"始めましょう。"},
+ {id:"t14", scene:"会議進行", lv:"初級", en:"Could you speak a little more slowly?", ja:"もう少しゆっくり話していただけますか？"},
+ {id:"t15", scene:"会議進行", lv:"中級", en:"Sorry to interrupt, but may I ask a question?", ja:"話の途中にすみません、質問してもよいですか？"},
+ {id:"t16", scene:"会議進行", lv:"中級", en:"Let's take this offline.", ja:"この件は会議後に個別に相談しましょう。"},
+ {id:"t17", scene:"会議進行", lv:"初級", en:"I'll share the minutes after the meeting.", ja:"会議後に議事録を共有します。"},
+ {id:"t18", scene:"会議進行", lv:"中級", en:"We are running behind schedule, so let's speed up.", ja:"予定より遅れているので、少し急ぎましょう。"},
+ {id:"t19", scene:"会議進行", lv:"中級", en:"Any other business before we close?", ja:"終了する前に、他に何かありますか？"},
+ {id:"t20", scene:"会議進行", lv:"初級", en:"Thank you for your time today.", ja:"本日はお時間をいただきありがとうございました。"},
+ {id:"t21", scene:"会議進行", lv:"初級", en:"Could you mute your microphone?", ja:"マイクをミュートにしていただけますか？"},
+ {id:"t22", scene:"会議進行", lv:"初級", en:"The audio is breaking up.", ja:"音声が途切れています。"},
+ {id:"t23", scene:"リスク管理", lv:"上級", en:"We should escalate this issue to the management.", ja:"この課題はマネジメント層にエスカレーションすべきです。"},
+ {id:"t24", scene:"品質・テスト", lv:"中級", en:"Could you share the test evidence?", ja:"テストエビデンスを共有していただけますか？"},
 ];
 
 /* F09: 業務用語集 */
@@ -298,22 +410,57 @@ const GLOSSARY = [
  {ab:"WBS", full:"Work Breakdown Structure", mean:"作業分解構成図"},
 ];
 
-/* F07: ロールプレイ台本（会議シーン別） */
+/* F07: ロールプレイ台本（会議シーン別）
+   progress / po / briefing は会議1本を通しで模擬する長編モード */
 const ROLEPLAYS = {
- host:{name:"会議ホスト役モード", desc:"あなたが進捗確認会議のホストです。AIは海外拠点Bの担当者役。", turns:[
-  {ai:"Good morning. This is the weekly progress meeting for the SystemX migration. Shall we start?", ja:"おはようございます。SystemX移行の週次進捗会議です。始めてよろしいですか？", hint:"開始の挨拶と進捗確認を切り出す", sample:"Good morning. Yes, let's start. Could you share the current progress first?"},
-  {ai:"Sure. Currently we are on time, and the development is 80 percent complete.", ja:"はい。現在予定どおりで、開発は80％完了です。", hint:"残り20%の完了見込みを確認する", sample:"Good to hear. When do you expect to complete the remaining 20 percent?"},
-  {ai:"We expect to finish by the end of July, but there is a risk on the test environment.", ja:"7月末完了見込みですが、テスト環境にリスクがあります。", hint:"リスクの詳細を尋ねる", sample:"Could you explain the risk on the test environment in more detail?"},
-  {ai:"The environment setup is delayed by one week because of a license issue.", ja:"ライセンスの問題で環境構築が1週間遅れています。", hint:"対応策と全体スケジュールへの影響を確認する", sample:"I see. Does this delay affect the overall schedule? What is your recovery plan?"},
-  {ai:"No impact so far. We will recover by adding one more member next week.", ja:"今のところ影響なしです。来週1名追加して挽回します。", hint:"了承し、次回までの宿題を確認して締める", sample:"Understood. Please share the updated plan by next meeting. Thank you, everyone."},
+ progress:{name:"進捗確認会（長編）", icon:"📈", desc:"週次進捗確認会議を丸ごと1本模擬します。あなたはホスト役、AIは海外拠点Bのリーダー役です（全13ターン・約20〜30分）。", turns:[
+  {ai:"Good morning. Everyone from site B has joined. We are ready when you are.", ja:"おはようございます。拠点Bのメンバーは全員参加しました。いつでも始められます。", hint:"開会を宣言し、本日のアジェンダ（進捗・品質・スケジュール・リスク）を伝える", sample:"Good morning, everyone. Let's get started. Today's agenda is progress update, quality status, schedule, and risks."},
+  {ai:"Understood. Then let me start with the progress. The development is 80 percent complete as of today.", ja:"承知しました。では進捗から。本日時点で開発は80％完了です。", hint:"順調さを認めつつ、残り20%の完了見込み時期を確認する", sample:"Good progress. When do you expect to complete the remaining 20 percent?"},
+  {ai:"We expect to finish by the end of July. However, there is one concern about the test environment.", ja:"7月末完了見込みです。ただし、テスト環境について懸念が1点あります。", hint:"懸念の詳細説明を求める", sample:"I see. Could you elaborate on the concern about the test environment?"},
+  {ai:"The environment setup is delayed by one week because of a license issue with ToolY.", ja:"ToolYのライセンス問題で、環境構築が1週間遅れています。", hint:"全体スケジュールへの影響と挽回策を確認する", sample:"Does this delay affect the overall schedule? What is your recovery plan?"},
+  {ai:"No impact on the go-live so far. We will catch up by assigning one more engineer next week.", ja:"今のところ本番稼働への影響はありません。来週エンジニアを1名追加して挽回します。", hint:"追加要員によるコストへの影響がないか確認する", sample:"Understood. Will the additional engineer affect the cost? Is it still within the budget?"},
+  {ai:"No additional cost. It is covered within the current PO. Shall I move on to the quality status?", ja:"追加費用はありません。現行POの範囲内です。品質状況に移ってよいですか？", hint:"了承して品質報告を促す", sample:"Good to hear. Yes, please go ahead with the quality status."},
+  {ai:"The defect rate is within the acceptable range. We found three critical bugs in the integration test, and all of them are already fixed.", ja:"欠陥率は許容範囲内です。結合テストで重大バグを3件検出しましたが、すべて修正済みです。", hint:"UATを予定どおり開始できるか確認する", sample:"Thank you. Then can we start UAT next Monday as planned?"},
+  {ai:"Yes, UAT can start on Monday. But we need the test data from the Japan side before that.", ja:"はい、月曜に開始できます。ただし、その前に日本側からテストデータをいただく必要があります。", hint:"テストデータの提供を引き受け、期限を確認する", sample:"We will prepare the test data. When exactly do you need it by?"},
+  {ai:"By this Friday, please. Otherwise the UAT schedule will be at risk.", ja:"今週金曜までにお願いします。でないとUATスケジュールがリスクになります。", hint:"金曜までの提供を約束し、次の議題（スケジュール）へ進める", sample:"Understood. We will send it by Friday. Now, let's move on to the schedule. Any changes to the milestones?"},
+  {ai:"The milestone review is scheduled for Friday as planned, and the go-live in October is still on track.", ja:"マイルストーンレビューは予定どおり金曜、10月の本番稼働も順調です。", hint:"リスクの議題に移り、新しいリスクがないか尋ねる", sample:"Good. Moving on to risks — do you see any new risks we should be aware of?"},
+  {ai:"One thing. Two of our testers may leave the project in August, so there is a potential resource risk for UAT.", ja:"1点あります。8月にテスター2名がプロジェクトを離れる可能性があり、UATの要員リスクです。", hint:"軽減策（mitigation plan）の作成を依頼し、期限を切る", sample:"That's important. Could you prepare a mitigation plan for the resource shortage by the next meeting?"},
+  {ai:"Sure, we will prepare the mitigation plan by next Wednesday and add it to the risk register.", ja:"承知しました。来週水曜までに軽減策を用意し、リスク管理表に追加します。", hint:"本日のアクションアイテムをまとめる（テストデータ／軽減策）", sample:"Thank you. Let me summarize today's action items. We will send the test data by Friday, and you will prepare the mitigation plan by Wednesday."},
+  {ai:"That is correct. Nothing else from our side. Thank you.", ja:"そのとおりです。こちらからは以上です。ありがとうございました。", hint:"議事録の共有を伝えて閉会する", sample:"Thank you all for joining. I will share the minutes after the meeting. See you next week."},
  ]},
- nego:{name:"交渉役モード", desc:"予算・PO配分の交渉相手はAI（海外拠点C側マネージャ役）です。", turns:[
+ po:{name:"発注確認会（長編）", icon:"📝", desc:"新規POの内容確認会議を模擬します。あなたは日本側の発注担当、AIは海外拠点Cの営業マネージャ役です（全11ターン）。", turns:[
+  {ai:"Thank you for your time today. The purpose of this meeting is to confirm the details of the new PO for ModuleZ. Shall we begin?", ja:"本日はお時間ありがとうございます。ModuleZの新規POの詳細確認が目的です。始めてよろしいですか？", hint:"開始を宣言し、確認したい項目（スコープ・金額・期間）を挙げる", sample:"Yes, let's begin. Today I would like to confirm three points: the scope, the amount, and the billing period."},
+  {ai:"Understood. First, the scope. This PO covers the development and the integration test of ModuleZ.", ja:"承知しました。まずスコープです。本POはModuleZの開発と結合テストをカバーします。", hint:"UAT支援がスコープに含まれるか確認する", sample:"Is my understanding correct that UAT support is not included in this scope?"},
+  {ai:"Correct. UAT support is optional. If you need it, it will be an additional 0.5 million per month.", ja:"そのとおりです。UAT支援はオプションで、必要な場合は月50万円の追加となります。", hint:"金額の内訳（開発・テスト）の説明を求める", sample:"I see. Could you break down the total amount by development and testing?"},
+  {ai:"Sure. Development is 4 million, and the integration test is 1.5 million. So the total is 5.5 million.", ja:"はい。開発が400万、結合テストが150万、合計550万です。", hint:"請求期間と請求サイクルを確認する", sample:"Thank you. And what about the billing period? Is it billed monthly?"},
+  {ai:"Yes, monthly billing from August to December, five months in total.", ja:"はい、8月から12月までの5ヶ月間、月次請求です。", hint:"作業開始に必要なPO発行期限を確認する", sample:"Understood. By when do you need the PO to be issued to start on time?"},
+  {ai:"We need the PO by the end of July. Otherwise the start will be delayed.", ja:"7月末までにPOが必要です。それを過ぎると開始が遅れます。", hint:"社内承認に2週間かかることを伝え、懸念を示す", sample:"That is a bit tight. Our internal approval usually takes two weeks, so we need to start the process this week."},
+  {ai:"I understand. If it helps, we can split the PO into two phases: development first, and testing later.", ja:"承知しました。もしよろしければ、POを開発とテストの2フェーズに分割することも可能です。", hint:"分割案に賛成し、まず開発分のみ先行する案を提案する", sample:"That works for us. I suggest we issue the PO for the development part first, and the testing part next month."},
+  {ai:"Agreed. Then we will send the revised quotation for the development part by Wednesday.", ja:"了解です。では開発分の修正見積書を水曜までにお送りします。", hint:"支払条件（支払サイト）を確認する", sample:"Thank you. Could you also confirm the payment terms? Is it 60 days after the invoice as usual?"},
+  {ai:"Yes, the same as the current contract, 60 days after the invoice date.", ja:"はい、現行契約と同じく請求書発行日から60日です。", hint:"為替レートなど前提条件が現行契約と同じか確認する", sample:"And is my understanding correct that the exchange rate assumption is also the same as the current contract?"},
+  {ai:"Correct, no changes to the rate assumptions. Anything else to confirm?", ja:"そのとおりです。レートの前提に変更はありません。他に確認事項はありますか？", hint:"合意内容（分割PO・水曜見積・7月末発行）をまとめる", sample:"Let me summarize. We will split the PO into two phases, you will send the revised quotation by Wednesday, and we will issue the first PO by the end of July."},
+  {ai:"Perfect. We will prepare the documents accordingly. Thank you very much.", ja:"完璧です。それに沿って書類を準備します。ありがとうございました。", hint:"お礼を述べ、議事録共有を伝えて閉会する", sample:"Thank you for your time today. I will share the minutes with the action items by tomorrow."},
+ ]},
+ briefing:{name:"プロジェクト説明会（長編）", icon:"📢", desc:"新規プロジェクトのキックオフ説明会を模擬します。あなたが説明者、AIは海外拠点のPM役として質問します（全11ターン）。", turns:[
+  {ai:"Thank you for organizing this session. We heard this is about a new project. Could you give us an overview first?", ja:"本日は設定ありがとうございます。新規プロジェクトの件と聞いています。まず概要を教えていただけますか？", hint:"プロジェクト概要（SystemX移行フェーズ2）を説明する", sample:"Thank you for joining. This project is Phase 2 of the SystemX migration, which covers the remaining modules of the core system."},
+  {ai:"I see. What is the main objective of this phase?", ja:"なるほど。このフェーズの主な目的は何ですか？", hint:"目的（老朽化対応・保守コスト削減など）を説明する", sample:"The main objective is to replace the legacy modules and reduce the maintenance cost by 30 percent."},
+  {ai:"Understood. Could you clarify the scope? What is in scope and out of scope?", ja:"わかりました。スコープを明確にしていただけますか？何が対象で何が対象外ですか？", hint:"スコープ内（ModuleZ移行・連携改修）とスコープ外（ToolY更改）を説明する", sample:"In scope is the migration of ModuleZ and the linkage modification. The ToolY upgrade is out of scope this time."},
+  {ai:"Clear. What about the overall schedule and the key milestones?", ja:"明確です。全体スケジュールと主要マイルストーンはどうなっていますか？", hint:"スケジュール（RA→開発→テスト→稼働）とマイルストーンを説明する", sample:"The RA phase starts in August, development from October, UAT in February, and the go-live is planned for April next year."},
+  {ai:"Thank you. How will the team be structured between Japan and our site?", ja:"ありがとうございます。日本側と当拠点のチーム体制はどうなりますか？", hint:"体制（日本側=要件定義・受入／拠点側=開発・テスト）を説明する", sample:"The Japan side will handle the requirement definition and acceptance, and your site will be in charge of development and testing."},
+  {ai:"Got it. What about the development environment? Will you provide it, or should we prepare it?", ja:"了解です。開発環境はどうなりますか？御社提供ですか、当方で準備ですか？", hint:"環境（日本側がクラウド環境を提供、9月までに構築）を説明する", sample:"We will provide a cloud-based environment from the Japan side. The setup will be completed by the end of September."},
+  {ai:"That helps. Are there any specific quality standards we should follow?", ja:"助かります。準拠すべき品質基準はありますか？", hint:"品質基準（欠陥率の閾値・レビュー必須など）を説明する", sample:"Yes, the defect rate must be within our standard threshold, and all deliverables require a peer review before submission."},
+  {ai:"Understood. Do you already see any risks or dependencies at this point?", ja:"承知しました。現時点で想定されるリスクや依存関係はありますか？", hint:"リスク（他システムとの連携・要員確保）を説明する", sample:"The main risk is the dependency on the SystemX interface team. Resource availability in Q4 is also a concern."},
+  {ai:"Noted. How do you want to communicate? Weekly meetings like the current project?", ja:"了解です。コミュニケーションはどうしますか？現行プロジェクトのように週次会議ですか？", hint:"会議体（週次進捗・月次レビュー）と使用ツールを説明する", sample:"Yes, we will have a weekly progress meeting and a monthly report review. We will use the same tools as the current project."},
+  {ai:"Sounds good. When do you need our estimation for this project?", ja:"良いですね。このプロジェクトの見積はいつまでに必要ですか？", hint:"見積期限を伝え、RA資料の提供を約束する", sample:"Please provide the estimation by the end of August. We will share the RA documents by next week."},
+  {ai:"Understood. We will review the documents and send questions by email. Thank you for the clear explanation.", ja:"承知しました。資料を確認し、質問はメールで送ります。わかりやすい説明をありがとうございました。", hint:"お礼を述べ、次のステップを確認して締める", sample:"Thank you. I look forward to your questions. Let's have a follow-up session once you review the documents."},
+ ]},
+ nego:{name:"交渉役モード", icon:"⚖️", desc:"予算・PO配分の交渉相手はAI（海外拠点C側マネージャ役）です（全4ターン・短編）。", turns:[
   {ai:"Regarding the additional PO, we think the whole cost should be charged to the Japan site.", ja:"追加POについて、費用は全額日本拠点の負担と考えています。", hint:"折半を提案する", sample:"We understand your point, but I suggest we divide it into half."},
   {ai:"Half and half? That is difficult because the change request came from your side.", ja:"折半ですか？変更要求は御社側からなので難しいです。", hint:"変更の背景を説明して譲歩を引き出す", sample:"The change was required to meet the common quality target, so both sides benefit from it."},
   {ai:"I see your point. Then how about 60-40, with 60 on the Japan side?", ja:"なるほど。では日本側60対40はどうですか？", hint:"条件付きで合意するか、再提案する", sample:"We can accept 60-40 if the delivery date stays within July. Is that acceptable?"},
   {ai:"OK, we can commit to the July delivery under that condition.", ja:"わかりました。その条件なら7月納品をお約束できます。", hint:"合意内容を確認して議事録化を宣言する", sample:"Great. Let me summarize the agreement and share the minutes by tomorrow."},
  ]},
- estimate:{name:"見積説明役モード", desc:"あなたが見積・コストの説明役。AIは日本側の上長役として質問します。", turns:[
+ estimate:{name:"見積説明役モード", icon:"🧮", desc:"あなたが見積・コストの説明役。AIは日本側の上長役として質問します（全4ターン・短編）。", turns:[
   {ai:"Please explain the cost estimation for the next phase.", ja:"次フェーズのコスト見積を説明してください。", hint:"総額とレンジを伝える", sample:"The total cost is around 600 to 1.2 million per month, depending on the manpower plan."},
   {ai:"Why is the range so wide? Can you break it down?", ja:"なぜレンジがそんなに広いのですか？内訳を説明できますか？", hint:"内訳（開発・テスト・管理）を説明する", sample:"The range depends on the test scope. Development is fixed, but the test manpower may double."},
   {ai:"Is there any way to reduce the upper limit?", ja:"上限を下げる方法はありますか？", hint:"削減案を提案する", sample:"We can reduce it by automating the regression tests with ToolY."},
@@ -788,7 +935,7 @@ function openRoleplay(){
     <h2 class="sec">モードを選択</h2>
     ${Object.entries(ROLEPLAYS).map(([k,v])=>`
       <div class="menu-tile" onclick="startRoleplay('${k}')">
-        <span class="ic">${{host:"🪑",nego:"⚖️",estimate:"🧮"}[k]}</span>
+        <span class="ic">${v.icon}</span>
         <div><div class="t">${esc(v.name)}</div><div class="d">${esc(v.desc)}</div></div>
       </div>`).join("")}
     <div class="note">※現在はシナリオ台本ベースの練習モードです。Azure OpenAI 接続時に自由会話へ拡張できます。</div>`);
@@ -798,7 +945,7 @@ function startRoleplay(key){
   rpLog = {mode:rp.name, date:new Date().toLocaleString("ja-JP"), items:[]};
   practiceScreen(`
     <div class="card">
-      <div class="meta"><span class="chip">${esc(rp.name)}</span></div>
+      <div class="meta"><span class="chip">${esc(rp.name)}</span><span class="chip" id="rpProg"></span></div>
       <div class="note">${esc(rp.desc)}</div>
       <div class="chat" id="rpChat"></div>
       <div id="rpInput"></div>
@@ -807,6 +954,8 @@ function startRoleplay(key){
 }
 function rpNextAi(){
   if(rpTurn >= rp.turns.length){ rpFinish(); return; }
+  const prog = document.getElementById("rpProg");
+  if(prog) prog.textContent = `ターン ${rpTurn+1} / ${rp.turns.length}`;
   const t = rp.turns[rpTurn];
   const chat = document.getElementById("rpChat");
   chat.insertAdjacentHTML("beforeend", `
