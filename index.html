@@ -686,6 +686,7 @@ function wordSheet(key){
   document.getElementById("overlay").classList.add("open");
 }
 function closeSheet(){
+  stopSpeak();
   document.getElementById("sheet").classList.remove("open");
   document.getElementById("overlay").classList.remove("open");
 }
@@ -695,6 +696,7 @@ function closeSheet(){
 ===================================================== */
 let teikeiMode = "all";
 function teikeiTab(btn, mode){
+  stopSpeak();
   teikeiMode = mode;
   document.querySelectorAll("#view-teikei .subtabs button").forEach(b=>b.classList.remove("on"));
   btn.classList.add("on");
@@ -763,11 +765,13 @@ function answerTeikei(btn, id){
    練習メニュー共通
 ===================================================== */
 function resetPractice(){
+  stopSpeak();
   document.getElementById("practiceMenu").style.display="block";
   document.getElementById("practiceBody").innerHTML="";
   if(activeRec){ try{activeRec.abort();}catch(e){} activeRec=null; }
 }
 function practiceScreen(html){
+  stopSpeak();
   document.getElementById("practiceMenu").style.display="none";
   document.getElementById("practiceBody").innerHTML =
     `<button class="back" onclick="resetPractice()">← 練習メニューに戻る</button>` + html;
@@ -1057,6 +1061,7 @@ function renderDash(){
 ===================================================== */
 function moreTab(name){
   show("more");
+  stopSpeak();
   ["glossary","import","settings"].forEach(t=>{
     const b=document.getElementById("mt-"+t); if(b) b.classList.toggle("on", t===name);
   });
@@ -1231,6 +1236,14 @@ function setFs(f){
 /* =====================================================
    初期化
 ===================================================== */
+/* 別アプリ・別タブに移ったら音声を停止（BGM連続再生モード中は継続） */
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="hidden" && !playingAll){
+    stopSpeak();
+    if(activeRec){ try{activeRec.abort();}catch(e){} activeRec=null; }
+  }
+});
+
 document.documentElement.className = "fs-"+(S.settings.fs||"m");
 renderSceneFilter();
 renderPhrases();
