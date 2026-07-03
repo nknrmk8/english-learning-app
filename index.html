@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ja" class="fs-m">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16294d">
+<title>実務直結型 英語学習アプリ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --navy:#16294d; --navy2:#1f3a6e; --accent:#3b82f6; --bg:#f2f4f8;
+  --card:#ffffff; --text:#1d2433; --sub:#5b6577; --line:#e3e8f0;
+  --t1bg:#fde8e8; --t1fg:#c0392b; --t2bg:#fdf3d7; --t2fg:#9c6b12; --t3bg:#e0ecfc; --t3fg:#1d5fbf;
+  --ok:#1a9c5d; --ng:#d64545;
+}
+html.fs-s{font-size:14px} html.fs-m{font-size:16px} html.fs-l{font-size:19px}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+body{margin:0; font-family:"Hiragino Sans","Yu Gothic UI","Segoe UI",Meiryo,sans-serif; background:var(--bg); color:var(--text); padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+header{position:sticky; top:0; z-index:20; background:var(--navy); color:#fff; padding:12px 16px calc(12px); display:flex; align-items:center; justify-content:space-between}
+header h1{font-size:1.05rem; margin:0; font-weight:700}
+header .sub{font-size:.7rem; opacity:.75}
+main{padding:12px; max-width:720px; margin:0 auto}
+.view{display:none} .view.active{display:block}
+/* bottom nav */
+nav{position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1; background:none; border:none; padding:8px 0 6px; font-size:.62rem; color:var(--sub); display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer}
+nav button .ic{font-size:1.25rem; line-height:1}
+nav button.on{color:var(--navy); font-weight:700}
+/* cards */
+.card{background:var(--card); border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(22,41,77,.08)}
+.card .en{font-size:1.05rem; line-height:1.55; font-weight:600}
+.card .ja{color:var(--sub); margin-top:6px; font-size:.88rem}
+.card .meta{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px}
+.chip{font-size:.68rem; background:#eef2f9; color:var(--navy2); border-radius:99px; padding:2px 10px}
+.chip.sp{background:#efe9fb; color:#6b46c1}
+.card .bg{font-size:.8rem; color:var(--sub); margin-top:8px; background:#f7f9fc; border-radius:8px; padding:8px}
+.simbox{margin-top:8px; font-size:.85rem; border-top:1px dashed var(--line); padding-top:8px; display:none}
+.simbox.open{display:block}
+.simbox div{padding:3px 0}
+.rowbtns{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+button.b{border:none; border-radius:10px; padding:8px 14px; font-size:.85rem; cursor:pointer; background:#eef2f9; color:var(--navy)}
+button.b.pri{background:var(--navy); color:#fff}
+button.b.warn{background:var(--ng); color:#fff}
+button.b:disabled{opacity:.45}
+/* tier words */
+.tw{border-radius:4px; padding:0 3px; cursor:pointer; font-weight:700}
+.tw.t1{background:var(--t1bg); color:var(--t1fg)}
+.tw.t2{background:var(--t2bg); color:var(--t2fg)}
+.tw.t3{background:var(--t3bg); color:var(--t3fg)}
+.w-play{background:#fffbe6}
+/* filter bar */
+.filterbar{display:flex; gap:6px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch}
+.filterbar button{flex:0 0 auto; border:1px solid var(--line); background:#fff; border-radius:99px; padding:6px 12px; font-size:.78rem; color:var(--sub); cursor:pointer}
+.filterbar button.on{background:var(--navy); color:#fff; border-color:var(--navy)}
+/* bottom sheet */
+#sheet{position:fixed; left:0; right:0; bottom:-100%; background:#fff; border-radius:18px 18px 0 0; z-index:50; padding:18px 18px calc(24px + env(safe-area-inset-bottom)); transition:bottom .25s; box-shadow:0 -4px 24px rgba(0,0,0,.2); max-height:70vh; overflow-y:auto}
+#sheet.open{bottom:0}
+#sheet h3{margin:0 0 4px; display:flex; align-items:center; gap:8px}
+#overlay{position:fixed; inset:0; background:rgba(10,20,40,.4); z-index:40; display:none}
+#overlay.open{display:block}
+.sheetrow{font-size:.9rem; margin-top:10px}
+.sheetrow b{color:var(--navy2)}
+/* practice menu */
+.menu-tile{display:flex; align-items:center; gap:14px; background:#fff; border-radius:14px; padding:16px; margin-bottom:10px; cursor:pointer; box-shadow:0 1px 3px rgba(22,41,77,.08)}
+.menu-tile .ic{font-size:1.7rem}
+.menu-tile .t{font-weight:700}
+.menu-tile .d{font-size:.78rem; color:var(--sub)}
+/* quiz / composition */
+.bigja{font-size:1.15rem; font-weight:700; line-height:1.6; margin:10px 0}
+.timerbar{height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin:8px 0}
+.timerbar i{display:block; height:100%; background:var(--accent); width:100%; transition:width .2s linear}
+textarea.ans, input.ans{width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:1rem; font-family:inherit}
+.scorebox{display:flex; gap:8px; margin-top:10px}
+.scorebox .s{flex:1; background:#f7f9fc; border-radius:10px; padding:8px; text-align:center}
+.scorebox .s b{font-size:1.2rem; display:block}
+.diffw{padding:0 2px; border-radius:3px}
+.diffw.hit{background:#d9f2e4; color:var(--ok)}
+.diffw.miss{background:#fbdcdc; color:var(--ng); text-decoration:line-through}
+/* chat (roleplay) */
+.chat{display:flex; flex-direction:column; gap:8px; margin:10px 0}
+.msg{max-width:85%; padding:10px 12px; border-radius:14px; font-size:.92rem; line-height:1.5}
+.msg.ai{background:#fff; align-self:flex-start; border:1px solid var(--line)}
+.msg.me{background:var(--navy); color:#fff; align-self:flex-end}
+.msg .jah{font-size:.75rem; color:var(--sub); margin-top:4px}
+.msg.me .jah{color:#c6d2ea}
+.msg .sample{font-size:.78rem; margin-top:6px; border-top:1px dashed var(--line); padding-top:5px; color:var(--navy2)}
+/* dashboard */
+.statgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.stat{background:#fff; border-radius:14px; padding:14px; text-align:center}
+.stat b{font-size:1.5rem; color:var(--navy)}
+.stat span{font-size:.72rem; color:var(--sub); display:block}
+.barrow{display:flex; align-items:center; gap:8px; margin:7px 0; font-size:.8rem}
+.barrow .lbl{width:7.5em; flex:none; color:var(--sub)}
+.barrow .bar{flex:1; height:10px; background:var(--line); border-radius:5px; overflow:hidden}
+.barrow .bar i{display:block; height:100%; background:var(--accent)}
+.barrow .pct{width:3em; text-align:right; flex:none}
+h2.sec{font-size:.95rem; color:var(--navy); margin:18px 0 8px}
+/* glossary table */
+table.gl{width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; font-size:.85rem}
+table.gl th{background:var(--navy); color:#fff; padding:8px; font-size:.75rem; text-align:left}
+table.gl td{padding:8px; border-bottom:1px solid var(--line); vertical-align:top}
+/* settings */
+.setrow{background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:.9rem}
+.setrow select,.setrow input[type=range]{max-width:55%}
+.seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.seg button{border:none; background:#fff; padding:6px 12px; cursor:pointer; font-size:.85rem}
+.seg button.on{background:var(--navy); color:#fff}
+.note{font-size:.75rem; color:var(--sub); margin:8px 2px}
+.fav{cursor:pointer; font-size:1.2rem; background:none; border:none; padding:0 4px}
+.empty{text-align:center; color:var(--sub); padding:30px 10px; font-size:.85rem}
+.tag-legend{display:flex; gap:10px; font-size:.72rem; margin-bottom:10px; flex-wrap:wrap}
+.tag-legend span{padding:2px 8px; border-radius:5px}
+.subtabs{display:flex; gap:8px; margin-bottom:12px}
+.subtabs button{flex:1; border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px; font-size:.82rem; cursor:pointer; color:var(--sub)}
+.subtabs button.on{background:var(--navy); color:#fff; border-color:var(--navy)}
+.back{background:none; border:none; color:var(--navy); font-size:.9rem; padding:4px 0; cursor:pointer; margin-bottom:6px}
+.rec-ind{display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--ng); animation:blink 1s infinite; margin-right:6px; vertical-align:middle}
+@keyframes blink{50%{opacity:.2}}
+.mock-banner{background:#fff4e0; color:#8a5a00; font-size:.75rem; padding:8px 12px; border-radius:10px; margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>実務直結英語</h1>
+    <div class="sub">明日の会議で使える英語</div>
+  </div>
+  <button class="b" style="background:var(--navy2);color:#fff" onclick="show('more');moreTab('settings')">⚙ 設定</button>
+</header>
+
+<main>
+  <!-- ============ F01/F02: フレーズ集 ============ -->
+  <section id="view-phrases" class="view active">
+    <div class="tag-legend">
+      <span style="background:var(--t1bg);color:var(--t1fg)">Tier1 必須語</span>
+      <span style="background:var(--t2bg);color:var(--t2fg)">Tier2 重要語</span>
+      <span style="background:var(--t3bg);color:var(--t3fg)">Tier3 専門語</span>
+    </div>
+    <div class="filterbar" id="sceneFilter"></div>
+    <div class="rowbtns" style="margin:0 0 12px">
+      <button class="b pri" id="btnPlayAll" onclick="togglePlayAll()">▶ 連続再生（BGM学習）</button>
+    </div>
+    <div id="phraseList"></div>
+  </section>
+
+  <!-- ============ F03: 定型句 ============ -->
+  <section id="view-teikei" class="view">
+    <div class="subtabs">
+      <button class="on" onclick="teikeiTab(this,'all')">すべて</button>
+      <button onclick="teikeiTab(this,'fav')">★ お気に入り</button>
+      <button onclick="teikeiTab(this,'quiz')">✍ 出題モード</button>
+    </div>
+    <div id="teikeiList"></div>
+    <div id="teikeiQuiz" style="display:none"></div>
+  </section>
+
+  <!-- ============ F05/F06/F07: 練習 ============ -->
+  <section id="view-practice" class="view">
+    <div id="practiceMenu">
+      <div class="menu-tile" onclick="openShadow()"><span class="ic">🎧</span><div><div class="t">シャドーイング</div><div class="d">音声を聞いて発話 → 音声認識で採点</div></div></div>
+      <div class="menu-tile" onclick="openCompose()"><span class="ic">⚡</span><div><div class="t">瞬間英作文</div><div class="d">日本語 → 制限時間内に英訳</div></div></div>
+      <div class="menu-tile" onclick="openRoleplay()"><span class="ic">🤝</span><div><div class="t">AIロールプレイ</div><div class="d">会議相手役との会話練習</div></div></div>
+      <div class="menu-tile" onclick="openLogs()"><span class="ic">📓</span><div><div class="t">会話ログ</div><div class="d">ロールプレイの履歴を復習</div></div></div>
+    </div>
+    <div id="practiceBody"></div>
+  </section>
+
+  <!-- ============ F08: ダッシュボード ============ -->
+  <section id="view-dash" class="view"></section>
+
+  <!-- ============ その他: F09用語集 / F10インポート / 設定 ============ -->
+  <section id="view-more" class="view">
+    <div class="subtabs">
+      <button id="mt-glossary" onclick="moreTab('glossary')">用語集</button>
+      <button id="mt-import" onclick="moreTab('import')">会議録取込</button>
+      <button id="mt-settings" class="on" onclick="moreTab('settings')">設定</button>
+    </div>
+    <div id="moreBody"></div>
+  </section>
+</main>
+
+<nav>
+  <button id="nav-phrases" class="on" onclick="show('phrases')"><span class="ic">💬</span>フレーズ</button>
+  <button id="nav-teikei" onclick="show('teikei')"><span class="ic">📚</span>定型句</button>
+  <button id="nav-practice" onclick="show('practice')"><span class="ic">🎤</span>練習</button>
+  <button id="nav-dash" onclick="show('dash')"><span class="ic">📊</span>分析</button>
+  <button id="nav-more" onclick="show('more')"><span class="ic">☰</span>その他</button>
+</nav>
+
+<div id="overlay" onclick="closeSheet()"></div>
+<div id="sheet"></div>
+
+<script>
+"use strict";
+/* =====================================================
+   データ定義（教材ソース：仕様書5章より。話者・拠点は匿名化済み）
+===================================================== */
+const SCENES = ["PO・発注","要員計画","予算・請求","スケジュール調整","理解確認","リリース報告","課題共有","環境構築依頼","トレーニング","コスト見積"];
+
+const PHRASES = [
+ {id:"p1", en:"Maybe the PO will be issued in the third week of July.", ja:"POは7月第3週に発行されるかもしれません。", scene:"PO・発注", sp:"Aさん", date:"2026-06-10",
+  bg:"週次進捗会議にて、海外拠点BへのPO発行時期の見込みを共有した場面。",
+  sim:["The PO is expected to be issued by mid-July.","We plan to issue the PO in late July.","The PO issuance might slip to the fourth week."]},
+ {id:"p2", en:"Do you have other concerns on the forecast manpower plan?", ja:"要員計画の見通しについて、他に懸念はありますか？", scene:"要員計画", sp:"Bさん", date:"2026-06-10",
+  bg:"次四半期の要員計画レビューで、参加者に懸念事項を確認した場面。",
+  sim:["Any other issues regarding the manpower forecast?","Is there anything else about the staffing plan?","Do you foresee any risks in the resource plan?"]},
+ {id:"p3", en:"This PO will be charged to the overseas site only.", ja:"このPOは海外拠点のみに請求されます。", scene:"予算・請求", sp:"Cさん", date:"2026-06-17",
+  bg:"PO費用の請求先（コスト負担部門）を明確化した場面。",
+  sim:["The cost will be billed to the overseas site.","This charge applies only to site C.","Site B will not be charged for this PO."]},
+ {id:"p4", en:"We will still stick to July on this one.", ja:"この件については、引き続き7月のままでいきます。", scene:"スケジュール調整", sp:"Aさん", date:"2026-06-17",
+  bg:"リスケ検討の後、当初スケジュールを維持する判断を伝えた場面。",
+  sim:["We will keep the July schedule.","No change to the July target for now.","Let's maintain the original July plan."]},
+ {id:"p5", en:"Is my understanding correct?", ja:"私の理解で合っていますか？", scene:"理解確認", sp:"Bさん", date:"2026-06-24",
+  bg:"相手の説明を自分の言葉で要約した後、認識齟齬がないか確認した場面。",
+  sim:["Did I understand that correctly?","Just to confirm my understanding.","Correct me if I'm wrong."]},
+ {id:"p6", en:"On time, actual and target is 98 percent.", ja:"予定どおりで、実績と目標は98％です。", scene:"リリース報告", sp:"Cさん", date:"2026-06-24",
+  bg:"月次レポートレビューで、リリース進捗の実績値を報告した場面。",
+  sim:["We are on schedule with 98 percent achievement.","Actual progress meets the 98 percent target.","The release is on track at 98 percent."]},
+ {id:"p7", en:"We are exceeding budget.", ja:"予算を超過しています。", scene:"課題共有", sp:"Aさん", date:"2026-07-01",
+  bg:"コスト実績レビューで、予算超過という課題を率直に共有した場面。",
+  sim:["We are over budget.","Costs have exceeded the plan.","The spending is above the threshold."]},
+ {id:"p8", en:"Is the meeting later connected for the environment setup?", ja:"後の会議は環境構築の件につながっていますか？", scene:"環境構築依頼", sp:"Bさん", date:"2026-07-01",
+  bg:"環境構築の打ち合わせと後続会議の関連を確認した場面。",
+  sim:["Is the next meeting about the environment setup?","Will we discuss the environment setup later?","Is the setup topic covered in the later call?"]},
+ {id:"p9", en:"Currently we are on time and two members are proceeding.", ja:"現在は予定どおりで、2名のメンバーが進めています。", scene:"トレーニング", sp:"Cさん", date:"2026-06-10",
+  bg:"新メンバーのトレーニング進捗を報告した場面。",
+  sim:["Training is on schedule with two members.","Two members are progressing as planned.","We are on track; two people are working on it."]},
+ {id:"p10", en:"Around 600 to 1.2 million per month per year.", ja:"年間ベースで月あたり約60万〜120万です。", scene:"コスト見積", sp:"Aさん", date:"2026-06-17",
+  bg:"委託コストの概算レンジを口頭で提示した場面。",
+  sim:["Roughly 0.6 to 1.2 million monthly.","The monthly estimation ranges from 600K to 1.2M.","It costs about one million per month on average."]},
+ {id:"p11", en:"It might be moved from July to August.", ja:"7月から8月に後ろ倒しになるかもしれません。", scene:"スケジュール調整", sp:"Bさん", date:"2026-06-24",
+  bg:"リリース時期が後ろ倒しになる可能性を事前に共有した場面。",
+  sim:["The schedule may slip to August.","It could be postponed to August.","There is a chance of moving it to August."]},
+ {id:"p12", en:"I suggest we divide it into half.", ja:"半分に分けることを提案します。", scene:"予算・請求", sp:"Cさん", date:"2026-07-01",
+  bg:"費用負担の折半案を提示した交渉場面。",
+  sim:["How about splitting it fifty-fifty?","Let's share the cost equally.","I propose an equal distribution."]},
+ {id:"p13", en:"Please share the schedule with us.", ja:"スケジュールを共有してください。", scene:"スケジュール調整", sp:"Aさん", date:"2026-07-01",
+  bg:"海外拠点Cに対して最新スケジュールの提示を依頼した場面。",
+  sim:["Could you send us the latest schedule?","Please provide the updated timeline.","We would appreciate the schedule by this week."]},
+ {id:"p14", en:"I will inform them of the current situation.", ja:"現状を彼らに伝えます。", scene:"課題共有", sp:"Bさん", date:"2026-06-17",
+  bg:"会議で決まった内容を関係者へ展開すると引き取った場面。",
+  sim:["I will pass this on to the team.","Let me update them on the status.","I will share the current status with them."]},
+];
+
+/* F02: 重要単語（3階層） */
+const TIER_WORDS = {
+ "sign off":{t:1, mean:"承認・承認サイン", ex:"We need your sign off by Friday.", use:"成果物の最終承認を求める場面で頻出。"},
+ "on-going":{t:2, mean:"進行中の", ex:"There are three on-going tasks.", use:"進捗報告で「継続中」の案件を指す。"},
+ "on time":{t:2, mean:"予定どおり", ex:"The release is on time.", use:"進捗が遅延なしであることを示す定番表現。"},
+ "PO":{t:1, mean:"発注書（Purchase Order）", ex:"The PO will be issued next week.", use:"発行時期・請求先の議論で最頻出の略語。"},
+ "RA":{t:1, mean:"要件分析（Requirement Analysis）", ex:"The RA phase ends this month.", use:"見積・工程の区切りとして使われる。"},
+ "budget":{t:1, mean:"予算", ex:"We are within budget.", use:"予算超過・配分の議論で使用。"},
+ "forecast":{t:1, mean:"見通し・予測", ex:"Please update the cost forecast.", use:"要員・コストの見込み値を指す。"},
+ "manpower":{t:1, mean:"要員・人的リソース", ex:"The manpower plan needs revision.", use:"要員計画（manpower plan）の形で頻出。"},
+ "billing":{t:1, mean:"請求", ex:"The billing will start in August.", use:"請求先・請求開始時期の確認で使用。"},
+ "release":{t:1, mean:"リリース", ex:"The release date is fixed.", use:"リリース進捗報告の中心語。"},
+ "delivery":{t:1, mean:"納品・納入", ex:"The delivery is scheduled for Q3.", use:"成果物の納品時期を示す。"},
+ "exceed":{t:1, mean:"超過する", ex:"We are exceeding budget.", use:"予算・閾値の超過報告で使用。"},
+ "target":{t:1, mean:"目標（値）", ex:"Actual and target is 98 percent.", use:"実績（actual）と対で使う。"},
+ "distribution":{t:2, mean:"配分・分配", ex:"The cost distribution is fifty-fifty.", use:"費用配分の議論で使用。"},
+ "estimation":{t:2, mean:"見積り", ex:"Please review the estimation.", use:"工数・コスト見積のレビューで使用。"},
+ "consignment":{t:2, mean:"委託", ex:"This is a consignment contract.", use:"開発委託契約の話題で使用。"},
+ "linkage":{t:2, mean:"連携", ex:"The system linkage test starts soon.", use:"システム間連携の文脈で使用。"},
+ "threshold":{t:2, mean:"閾値", ex:"The cost exceeded the threshold.", use:"予算・品質の許容ラインを指す。"},
+ "deliverable":{t:2, mean:"成果物", ex:"All deliverables are submitted.", use:"納品対象の成果物一覧などで使用。"},
+ "SystemX":{t:3, mean:"基幹システムX（仮称）", ex:"SystemX migration is in progress.", use:"移行プロジェクトの対象システム。"},
+ "ToolY":{t:3, mean:"データ統合ツールY（仮称）", ex:"ToolY handles the data transfer.", use:"ETL処理の話題で登場。"},
+ "ModuleZ":{t:3, mean:"生産管理モジュールZ（仮称）", ex:"ModuleZ will be released in Q4.", use:"生産管理系の開発話題で登場。"},
+};
+
+/* F03: 定型句データベース */
+const TEIKEI = [
+ {id:"t1", scene:"理解確認", lv:"初級", en:"Is my understanding correct?", ja:"私の理解で合っていますか？"},
+ {id:"t2", scene:"スケジュール調整", lv:"初級", en:"It might be moved from July to August.", ja:"7月から8月に後ろ倒しになるかもしれません。"},
+ {id:"t3", scene:"予算・請求", lv:"中級", en:"I suggest we divide it into half.", ja:"半分に分けることを提案します。"},
+ {id:"t4", scene:"理解確認", lv:"初級", en:"Let me check with him.", ja:"彼に確認します。"},
+ {id:"t5", scene:"スケジュール調整", lv:"初級", en:"Please share the schedule with us.", ja:"スケジュールを共有してください。"},
+ {id:"t6", scene:"スケジュール調整", lv:"初級", en:"We will stick to this plan for now.", ja:"一旦この計画のまま進めます。"},
+ {id:"t7", scene:"課題共有", lv:"中級", en:"I will inform them of the current situation.", ja:"現状を彼らに伝えます。"},
+ {id:"t8", scene:"スケジュール調整", lv:"中級", en:"We will return to the original plan.", ja:"元の計画に戻します。"},
+ {id:"t9", scene:"リリース報告", lv:"初級", en:"We are on schedule so far.", ja:"今のところ予定どおりです。"},
+ {id:"t10", scene:"要員計画", lv:"中級", en:"Do you have other concerns on the forecast manpower plan?", ja:"要員計画の見通しについて他に懸念はありますか？"},
+ {id:"t11", scene:"コスト見積", lv:"上級", en:"Could you break down the estimation by phase?", ja:"見積をフェーズ別に分解していただけますか？"},
+ {id:"t12", scene:"課題共有", lv:"上級", en:"We are exceeding budget, so we need to discuss countermeasures.", ja:"予算を超過しているため、対策を協議する必要があります。"},
+];
+
+/* F09: 業務用語集 */
+const GLOSSARY = [
+ {ab:"PO", full:"Purchase Order", mean:"発注書"},
+ {ab:"RA", full:"Requirement Analysis", mean:"要件分析"},
+ {ab:"SystemX", full:"基幹システムX", mean:"業務基幹システム（仮称）"},
+ {ab:"ToolY", full:"データ統合ツールY", mean:"ETLツール（仮称）"},
+ {ab:"ModuleZ", full:"生産管理モジュールZ", mean:"生産管理システム（仮称）"},
+ {ab:"UAT", full:"User Acceptance Test", mean:"ユーザー受入テスト"},
+ {ab:"ETA", full:"Estimated Time of Arrival", mean:"完了予定時期"},
+ {ab:"WBS", full:"Work Breakdown Structure", mean:"作業分解構成図"},
+];
+
+/* F07: ロールプレイ台本（会議シーン別） */
+const ROLEPLAYS = {
+ host:{name:"会議ホスト役モード", desc:"あなたが進捗確認会議のホストです。AIは海外拠点Bの担当者役。", turns:[
+  {ai:"Good morning. This is the weekly progress meeting for the SystemX migration. Shall we start?", ja:"おはようございます。SystemX移行の週次進捗会議です。始めてよろしいですか？", hint:"開始の挨拶と進捗確認を切り出す", sample:"Good morning. Yes, let's start. Could you share the current progress first?"},
+  {ai:"Sure. Currently we are on time, and the development is 80 percent complete.", ja:"はい。現在予定どおりで、開発は80％完了です。", hint:"残り20%の完了見込みを確認する", sample:"Good to hear. When do you expect to complete the remaining 20 percent?"},
+  {ai:"We expect to finish by the end of July, but there is a risk on the test environment.", ja:"7月末完了見込みですが、テスト環境にリスクがあります。", hint:"リスクの詳細を尋ねる", sample:"Could you explain the risk on the test environment in more detail?"},
+  {ai:"The environment setup is delayed by one week because of a license issue.", ja:"ライセンスの問題で環境構築が1週間遅れています。", hint:"対応策と全体スケジュールへの影響を確認する", sample:"I see. Does this delay affect the overall schedule? What is your recovery plan?"},
+  {ai:"No impact so far. We will recover by adding one more member next week.", ja:"今のところ影響なしです。来週1名追加して挽回します。", hint:"了承し、次回までの宿題を確認して締める", sample:"Understood. Please share the updated plan by next meeting. Thank you, everyone."},
+ ]},
+ nego:{name:"交渉役モード", desc:"予算・PO配分の交渉相手はAI（海外拠点C側マネージャ役）です。", turns:[
+  {ai:"Regarding the additional PO, we think the whole cost should be charged to the Japan site.", ja:"追加POについて、費用は全額日本拠点の負担と考えています。", hint:"折半を提案する", sample:"We understand your point, but I suggest we divide it into half."},
+  {ai:"Half and half? That is difficult because the change request came from your side.", ja:"折半ですか？変更要求は御社側からなので難しいです。", hint:"変更の背景を説明して譲歩を引き出す", sample:"The change was required to meet the common quality target, so both sides benefit from it."},
+  {ai:"I see your point. Then how about 60-40, with 60 on the Japan side?", ja:"なるほど。では日本側60対40はどうですか？", hint:"条件付きで合意するか、再提案する", sample:"We can accept 60-40 if the delivery date stays within July. Is that acceptable?"},
+  {ai:"OK, we can commit to the July delivery under that condition.", ja:"わかりました。その条件なら7月納品をお約束できます。", hint:"合意内容を確認して議事録化を宣言する", sample:"Great. Let me summarize the agreement and share the minutes by tomorrow."},
+ ]},
+ estimate:{name:"見積説明役モード", desc:"あなたが見積・コストの説明役。AIは日本側の上長役として質問します。", turns:[
+  {ai:"Please explain the cost estimation for the next phase.", ja:"次フェーズのコスト見積を説明してください。", hint:"総額とレンジを伝える", sample:"The total cost is around 600 to 1.2 million per month, depending on the manpower plan."},
+  {ai:"Why is the range so wide? Can you break it down?", ja:"なぜレンジがそんなに広いのですか？内訳を説明できますか？", hint:"内訳（開発・テスト・管理）を説明する", sample:"The range depends on the test scope. Development is fixed, but the test manpower may double."},
+  {ai:"Is there any way to reduce the upper limit?", ja:"上限を下げる方法はありますか？", hint:"削減案を提案する", sample:"We can reduce it by automating the regression tests with ToolY."},
+  {ai:"Sounds good. When can you provide the revised estimation?", ja:"良いですね。修正見積はいつ出せますか？", hint:"期限を約束して締める", sample:"We will share the revised estimation by the end of next week."},
+ ]},
+};
+
+/* =====================================================
+   状態管理（localStorage）
+===================================================== */
+const LS_KEY = "ela_state_v1";
+let S = loadState();
+function loadState(){
+  try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return s; }catch(e){}
+  return {fav:[], stats:{time:0, sessions:0, quiz:{}, missed:{}}, logs:[], userPhrases:[],
+          settings:{rate:1.0, voice:"", showJa:true, fs:"m"}};
+}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+S.stats.sessions = (S.stats.sessions||0)+1; save();
+
+/* 学習時間の計測（画面表示中のみ10秒刻み） */
+setInterval(()=>{ if(document.visibilityState==="visible"){ S.stats.time += 10; save(); } }, 10000);
+
+function recQuiz(scene, ok){
+  const q = S.stats.quiz[scene] || {c:0,t:0};
+  q.t++; if(ok) q.c++;
+  S.stats.quiz[scene]=q; save();
+}
+function recMissed(word){
+  const w = word.toLowerCase();
+  S.stats.missed[w] = (S.stats.missed[w]||0)+1; save();
+}
+/* 弱点シーン：正答率最低のシーン */
+function weakScene(){
+  let worst=null, rate=1.01;
+  for(const [sc,q] of Object.entries(S.stats.quiz)){
+    if(q.t>=2 && q.c/q.t < rate){ rate=q.c/q.t; worst=sc; }
+  }
+  return worst;
+}
+
+/* =====================================================
+   TTS（F04）: Web Speech API
+===================================================== */
+let VOICES = [];
+function refreshVoices(){
+  VOICES = speechSynthesis.getVoices().filter(v=>v.lang.toLowerCase().startsWith("en"));
+}
+if("speechSynthesis" in window){
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = ()=>{ refreshVoices(); if(document.getElementById("voiceSel")) renderSettings(); };
+}
+function speak(text, {onBoundary=null, onEnd=null}={}){
+  if(!("speechSynthesis" in window)){ alert("この端末は音声合成に対応していません"); return null; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  u.rate = S.settings.rate;
+  const v = VOICES.find(v=>v.name===S.settings.voice);
+  if(v){ u.voice = v; u.lang = v.lang; }
+  if(onBoundary) u.onboundary = onBoundary;
+  if(onEnd) u.onend = onEnd;
+  speechSynthesis.speak(u);
+  return u;
+}
+function stopSpeak(){ if("speechSynthesis" in window) speechSynthesis.cancel(); }
+
+/* =====================================================
+   音声認識（F05）: Web Speech API
+===================================================== */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+function makeRecognizer(onResult, onEnd){
+  const r = new SR();
+  r.lang="en-US"; r.interimResults=false; r.maxAlternatives=1;
+  r.onresult = e=>onResult(e.results[0][0].transcript);
+  r.onerror = e=>{ if(onEnd) onEnd(e.error); };
+  r.onend = ()=>{ if(onEnd) onEnd(); };
+  return r;
+}
+
+/* =====================================================
+   共通ユーティリティ
+===================================================== */
+function esc(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function norm(s){ return s.toLowerCase().replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim(); }
+function words(s){ return norm(s).split(" ").filter(Boolean); }
+
+/* 単語一致率（参照側の何%を言えたか） */
+function matchScore(ref, hyp){
+  const rw = words(ref), hw = new Set(words(hyp));
+  if(!rw.length) return {score:0, hits:[]};
+  const hits = rw.map(w=>hw.has(w));
+  const score = Math.round(100 * hits.filter(Boolean).length / rw.length);
+  return {score, hits, rw};
+}
+
+/* F02: Tierハイライト（フレーズ全文をspan化） */
+const TIER_RE = new RegExp("\\b(" + Object.keys(TIER_WORDS)
+  .sort((a,b)=>b.length-a.length)
+  .map(w=>w.replace(/[-\/\\^$*+?.()|[\]{}]/g,"\\$&")).join("|") + ")\\b","gi");
+function highlight(text){
+  return esc(text).replace(TIER_RE, m=>{
+    const key = Object.keys(TIER_WORDS).find(k=>k.toLowerCase()===m.toLowerCase());
+    const t = TIER_WORDS[key].t;
+    return `<span class="tw t${t}" onclick="event.stopPropagation();wordSheet('${key}')">${m}</span>`;
+  });
+}
+
+/* =====================================================
+   画面切替
+===================================================== */
+function show(name){
+  stopSpeak(); stopPlayAll(false);
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b=>b.classList.remove("on"));
+  document.getElementById("view-"+name).classList.add("active");
+  document.getElementById("nav-"+name).classList.add("on");
+  if(name==="dash") renderDash();
+  if(name==="practice") resetPractice();
+}
+
+/* =====================================================
+   F01/F02: フレーズ集
+===================================================== */
+let curScene = "すべて";
+function allPhrases(){ return PHRASES.concat(S.userPhrases||[]); }
+
+function renderSceneFilter(){
+  const scenes = ["すべて", ...SCENES];
+  if((S.userPhrases||[]).length) scenes.push("インポート");
+  document.getElementById("sceneFilter").innerHTML = scenes.map(sc=>
+    `<button class="${sc===curScene?"on":""}" onclick="curScene='${sc}';renderSceneFilter();renderPhrases()">${sc}</button>`).join("");
+}
+
+function renderPhrases(){
+  const list = allPhrases().filter(p=>curScene==="すべて"||p.scene===curScene);
+  const showJa = S.settings.showJa;
+  document.getElementById("phraseList").innerHTML = list.map(p=>`
+    <div class="card" id="card-${p.id}">
+      <div class="meta">
+        <span class="chip">${esc(p.scene)}</span>
+        <span class="chip sp">${esc(p.sp)}</span>
+        <span class="chip">${esc(p.date)}</span>
+      </div>
+      <div class="en" id="en-${p.id}">${highlight(p.en)}</div>
+      ${showJa && p.ja ? `<div class="ja">${esc(p.ja)}</div>` : ""}
+      ${p.bg ? `<div class="bg">💡 ${esc(p.bg)}</div>` : ""}
+      <div class="rowbtns">
+        <button class="b pri" onclick="playPhrase('${p.id}')">🔊 再生</button>
+        ${p.sim && p.sim.length ? `<button class="b" onclick="document.getElementById('sim-${p.id}').classList.toggle('open')">類似表現</button>` : ""}
+      </div>
+      ${p.sim && p.sim.length ? `<div class="simbox" id="sim-${p.id}">${p.sim.map(s=>`<div>・${highlight(s)} <button class="b" style="padding:2px 8px;font-size:.7rem" onclick="speakText(this)" data-t="${esc(s)}">🔊</button></div>`).join("")}</div>`:""}
+    </div>`).join("") || `<div class="empty">このカテゴリのフレーズはまだありません</div>`;
+}
+function speakText(btn){ speak(btn.dataset.t); }
+
+/* 再生（読み上げ位置ハイライト連動） */
+function playPhrase(id){
+  const p = allPhrases().find(x=>x.id===id);
+  if(!p) return;
+  const el = document.getElementById("en-"+id);
+  // 単語spanに分解（tierハイライトは維持しつつwordインデックスを付与）
+  const tokens = p.en.split(/(\s+)/);
+  let charPos = 0;
+  el.innerHTML = tokens.map(tk=>{
+    const start = charPos; charPos += tk.length;
+    if(/^\s+$/.test(tk) || !tk) return tk;
+    return `<span class="pw" data-s="${start}">${highlight(tk)}</span>`;
+  }).join("");
+  const spans = [...el.querySelectorAll(".pw")];
+  speak(p.en, {
+    onBoundary: e=>{
+      spans.forEach(s=>s.classList.remove("w-play"));
+      let target=null;
+      for(const s of spans){ if(+s.dataset.s <= e.charIndex) target=s; }
+      if(target) target.classList.add("w-play");
+    },
+    onEnd: ()=>{ spans.forEach(s=>s.classList.remove("w-play")); }
+  });
+}
+
+/* 連続再生（BGM学習モード） */
+let playingAll = false, playIdx = 0;
+function togglePlayAll(){
+  if(playingAll){ stopPlayAll(true); return; }
+  playingAll = true; playIdx = 0;
+  document.getElementById("btnPlayAll").textContent = "⏸ 停止";
+  playNext();
+}
+function playNext(){
+  if(!playingAll) return;
+  const list = allPhrases().filter(p=>curScene==="すべて"||p.scene===curScene);
+  if(playIdx >= list.length){ stopPlayAll(true); return; }
+  const p = list[playIdx];
+  const card = document.getElementById("card-"+p.id);
+  if(card){ card.scrollIntoView({behavior:"smooth", block:"center"}); card.style.outline="2px solid var(--accent)"; }
+  speak(p.en, {onEnd: ()=>{
+    if(card) card.style.outline="";
+    playIdx++;
+    setTimeout(playNext, 700);
+  }});
+}
+function stopPlayAll(updateBtn){
+  playingAll = false;
+  if(updateBtn){ stopSpeak(); const b=document.getElementById("btnPlayAll"); if(b) b.textContent="▶ 連続再生（BGM学習）"; }
+  document.querySelectorAll(".card").forEach(c=>c.style.outline="");
+}
+
+/* F02: 単語ボトムシート */
+function wordSheet(key){
+  const w = TIER_WORDS[key];
+  const tierName = {1:"Tier1 必須語",2:"Tier2 重要語",3:"Tier3 専門語"}[w.t];
+  const usedIn = allPhrases().filter(p=>norm(p.en).includes(key.toLowerCase())).slice(0,3);
+  document.getElementById("sheet").innerHTML = `
+    <h3><span class="tw t${w.t}">${esc(key)}</span> <span class="chip">${tierName}</span></h3>
+    <div class="sheetrow"><b>意味：</b>${esc(w.mean)}</div>
+    <div class="sheetrow"><b>使用例：</b>${esc(w.ex)} <button class="b" style="padding:2px 10px" onclick="speakText(this)" data-t="${esc(w.ex)}">🔊</button></div>
+    <div class="sheetrow"><b>使われ方：</b>${esc(w.use)}</div>
+    ${usedIn.length?`<div class="sheetrow"><b>この会議での例：</b>${usedIn.map(p=>`<div style="margin-top:4px">「${esc(p.en)}」（${esc(p.sp)}・${esc(p.scene)}）</div>`).join("")}</div>`:""}
+    <div class="rowbtns"><button class="b pri" onclick="speakText(this)" data-t="${esc(key)}">🔊 発音</button>
+    <button class="b" onclick="closeSheet()">閉じる</button></div>`;
+  document.getElementById("sheet").classList.add("open");
+  document.getElementById("overlay").classList.add("open");
+}
+function closeSheet(){
+  document.getElementById("sheet").classList.remove("open");
+  document.getElementById("overlay").classList.remove("open");
+}
+
+/* =====================================================
+   F03: 定型句データベース
+===================================================== */
+let teikeiMode = "all";
+function teikeiTab(btn, mode){
+  teikeiMode = mode;
+  document.querySelectorAll("#view-teikei .subtabs button").forEach(b=>b.classList.remove("on"));
+  btn.classList.add("on");
+  if(mode==="quiz"){ document.getElementById("teikeiList").style.display="none";
+    document.getElementById("teikeiQuiz").style.display="block"; startTeikeiQuiz(); }
+  else{ document.getElementById("teikeiList").style.display="block";
+    document.getElementById("teikeiQuiz").style.display="none"; renderTeikei(); }
+}
+function renderTeikei(){
+  let list = TEIKEI;
+  if(teikeiMode==="fav") list = list.filter(t=>S.fav.includes(t.id));
+  document.getElementById("teikeiList").innerHTML = list.map(t=>`
+    <div class="card">
+      <div class="meta">
+        <span class="chip">${esc(t.scene)}</span><span class="chip">${esc(t.lv)}</span>
+        <button class="fav" style="margin-left:auto" onclick="toggleFav('${t.id}')">${S.fav.includes(t.id)?"★":"☆"}</button>
+      </div>
+      <div class="en">${highlight(t.en)}</div>
+      <div class="ja">${esc(t.ja)}</div>
+      <div class="rowbtns"><button class="b pri" onclick="speakText(this)" data-t="${esc(t.en)}">🔊 再生</button></div>
+    </div>`).join("") || `<div class="empty">お気に入りはまだありません。☆をタップして登録できます。</div>`;
+}
+function toggleFav(id){
+  const i = S.fav.indexOf(id);
+  if(i>=0) S.fav.splice(i,1); else S.fav.push(id);
+  save(); renderTeikei();
+}
+
+/* 定型句クイズ（4択：日本語→正しい英文を選ぶ） */
+let tq = null;
+function startTeikeiQuiz(){
+  // 弱点シーン優先の出題
+  const weak = weakScene();
+  let pool = [...TEIKEI];
+  if(weak && pool.some(t=>t.scene===weak)){
+    pool.sort((a,b)=>(a.scene===weak?-1:0)-(b.scene===weak?-1:0));
+    pool = pool.slice(0, Math.max(6,pool.length));
+  }
+  const q = pool[Math.floor(Math.random()*Math.min(pool.length, weak?4:pool.length))];
+  const wrongs = TEIKEI.filter(t=>t.id!==q.id).sort(()=>Math.random()-.5).slice(0,3);
+  const opts = [q,...wrongs].sort(()=>Math.random()-.5);
+  tq = q;
+  document.getElementById("teikeiQuiz").innerHTML = `
+    <div class="card">
+      <div class="meta"><span class="chip">${esc(q.scene)}</span>${weak===q.scene?'<span class="chip" style="background:#fbdcdc;color:var(--ng)">弱点シーン</span>':""}</div>
+      <div class="bigja">「${esc(q.ja)}」</div>
+      <div class="note">正しい英語表現を選んでください</div>
+      <div id="tqOpts">${opts.map(o=>`<button class="b" style="display:block;width:100%;text-align:left;margin-top:8px" onclick="answerTeikei(this,'${o.id}')">${esc(o.en)}</button>`).join("")}</div>
+      <div id="tqResult"></div>
+    </div>`;
+}
+function answerTeikei(btn, id){
+  const ok = id===tq.id;
+  recQuiz(tq.scene, ok);
+  if(!ok) words(tq.en).filter(w=>w.length>3).slice(0,2).forEach(recMissed);
+  document.querySelectorAll("#tqOpts button").forEach(b=>b.disabled=true);
+  btn.style.background = ok?"#d9f2e4":"#fbdcdc";
+  document.getElementById("tqResult").innerHTML = `
+    <div class="sheetrow">${ok?"⭕ 正解！":"❌ 不正解"}　正解：<b>${esc(tq.en)}</b>
+    <button class="b" style="padding:2px 10px" onclick="speakText(this)" data-t="${esc(tq.en)}">🔊</button></div>
+    <div class="rowbtns"><button class="b pri" onclick="startTeikeiQuiz()">次の問題 →</button></div>`;
+  if(ok) speak(tq.en);
+}
+
+/* =====================================================
+   練習メニュー共通
+===================================================== */
+function resetPractice(){
+  document.getElementById("practiceMenu").style.display="block";
+  document.getElementById("practiceBody").innerHTML="";
+  if(activeRec){ try{activeRec.abort();}catch(e){} activeRec=null; }
+}
+function practiceScreen(html){
+  document.getElementById("practiceMenu").style.display="none";
+  document.getElementById("practiceBody").innerHTML =
+    `<button class="back" onclick="resetPractice()">← 練習メニューに戻る</button>` + html;
+}
+let activeRec = null;
+
+/* =====================================================
+   F05: シャドーイング
+===================================================== */
+let shadowP = null;
+function openShadow(){
+  pickShadow();
+}
+function pickShadow(){
+  const pool = allPhrases();
+  shadowP = pool[Math.floor(Math.random()*pool.length)];
+  const srOk = !!SR;
+  practiceScreen(`
+    <div class="card">
+      <div class="meta"><span class="chip">${esc(shadowP.scene)}</span></div>
+      <div class="en">${highlight(shadowP.en)}</div>
+      ${S.settings.showJa && shadowP.ja?`<div class="ja">${esc(shadowP.ja)}</div>`:""}
+      <div class="rowbtns">
+        <button class="b pri" onclick="speakText(this)" data-t="${esc(shadowP.en)}">🔊 お手本を聞く</button>
+        <button class="b" onclick="pickShadow()">別のフレーズ</button>
+      </div>
+      ${srOk?`
+      <div class="rowbtns">
+        <button class="b warn" id="recBtn" onclick="startShadowRec()">🎙 発話して採点</button>
+      </div>
+      <div id="shadowResult"></div>`
+      :`<div class="mock-banner">この端末のブラウザは音声認識に対応していません（iOSのSafari等）。Android版Chrome、またはPC版Chrome/Edgeでご利用ください。お手本再生は利用できます。</div>`}
+    </div>`);
+}
+function startShadowRec(){
+  const btn = document.getElementById("recBtn");
+  btn.innerHTML = '<span class="rec-ind"></span>聞き取り中…（英語で発話してください）';
+  btn.disabled = true;
+  const rec = makeRecognizer(
+    transcript=>{
+      showShadowScore(transcript);
+    },
+    err=>{
+      btn.disabled=false; btn.textContent="🎙 発話して採点";
+      if(err && err!=="aborted") document.getElementById("shadowResult").innerHTML =
+        `<div class="mock-banner">音声を取得できませんでした（${esc(String(err))}）。マイク許可をご確認ください。</div>`;
+      activeRec=null;
+    });
+  activeRec = rec;
+  rec.start();
+}
+function showShadowScore(transcript){
+  const {score, hits, rw} = matchScore(shadowP.en, transcript);
+  recQuiz(shadowP.scene, score>=70);
+  rw.forEach((w,i)=>{ if(!hits[i] && w.length>3) recMissed(w); });
+  const diffHtml = rw.map((w,i)=>`<span class="diffw ${hits[i]?"hit":"miss"}">${esc(w)}</span>`).join(" ");
+  document.getElementById("shadowResult").innerHTML = `
+    <div class="scorebox">
+      <div class="s"><b style="color:${score>=70?"var(--ok)":"var(--ng)"}">${score}</b><span>正確さ（%）</span></div>
+      <div class="s"><b>${words(transcript).length}/${rw.length}</b><span>語数（認識/お手本）</span></div>
+    </div>
+    <div class="sheetrow"><b>認識結果：</b>${esc(transcript)}</div>
+    <div class="sheetrow"><b>単語チェック：</b><br>${diffHtml}</div>
+    <div class="rowbtns">
+      <button class="b" onclick="startShadowRec()">もう一度</button>
+      <button class="b pri" onclick="pickShadow()">次のフレーズ →</button>
+    </div>`;
+  const btn=document.getElementById("recBtn");
+  if(btn){ btn.disabled=false; btn.textContent="🎙 発話して採点"; }
+}
+
+/* =====================================================
+   F06: 瞬間英作文
+===================================================== */
+let compQ=null, compTimer=null, compLimit=20, compLeft=0;
+function openCompose(){
+  nextCompose();
+}
+function composePool(){
+  const pool = PHRASES.map(p=>({en:p.en, ja:p.ja, scene:p.scene}))
+    .concat(TEIKEI.map(t=>({en:t.en, ja:t.ja, scene:t.scene})));
+  const weak = weakScene();
+  if(weak){
+    const w = pool.filter(x=>x.scene===weak);
+    if(w.length && Math.random()<0.5) return w; // 50%の確率で弱点シーンから出題
+  }
+  return pool;
+}
+function nextCompose(){
+  clearInterval(compTimer);
+  const pool = composePool();
+  compQ = pool[Math.floor(Math.random()*pool.length)];
+  compLeft = compLimit;
+  practiceScreen(`
+    <div class="card">
+      <div class="meta"><span class="chip">${esc(compQ.scene)}</span>
+        <span class="chip">制限 ${compLimit}秒</span></div>
+      <div class="note">次の日本語を英語で言ってみましょう（入力または🎙）</div>
+      <div class="bigja">「${esc(compQ.ja)}」</div>
+      <div class="timerbar"><i id="tbar"></i></div>
+      <textarea class="ans" id="compAns" rows="2" placeholder="英語で入力…" autocomplete="off"></textarea>
+      <div class="rowbtns">
+        <button class="b pri" onclick="gradeCompose()">採点する</button>
+        ${SR?'<button class="b" id="compMic" onclick="composeMic()">🎙 音声で答える</button>':""}
+        <button class="b" onclick="nextCompose()">スキップ</button>
+      </div>
+      <div id="compResult"></div>
+    </div>`);
+  compTimer = setInterval(()=>{
+    compLeft -= 0.2;
+    const bar=document.getElementById("tbar");
+    if(bar) bar.style.width = Math.max(0, compLeft/compLimit*100)+"%";
+    if(compLeft<=0){ clearInterval(compTimer); gradeCompose(true); }
+  },200);
+}
+function composeMic(){
+  const b=document.getElementById("compMic");
+  b.innerHTML='<span class="rec-ind"></span>聞き取り中…'; b.disabled=true;
+  const rec = makeRecognizer(t=>{
+    document.getElementById("compAns").value=t;
+    b.disabled=false; b.textContent="🎙 音声で答える";
+    gradeCompose();
+  }, ()=>{ b.disabled=false; b.textContent="🎙 音声で答える"; activeRec=null; });
+  activeRec=rec; rec.start();
+}
+function gradeCompose(timeout=false){
+  clearInterval(compTimer);
+  const ansEl=document.getElementById("compAns");
+  if(!ansEl || document.getElementById("compResult").innerHTML) return;
+  const ans = ansEl.value.trim();
+  const ref = compQ.en;
+  // 簡易3軸採点
+  const {score:meaning, hits, rw} = matchScore(ref, ans);
+  const aw = words(ans);
+  // 文法（語順）: 一致語の順序保存率（LCS近似）
+  let lcs=0, j=0;
+  for(const w of rw){ const k=aw.indexOf(w, j); if(k>=0){ lcs++; j=k+1; } }
+  const grammar = rw.length? Math.round(100*lcs/rw.length):0;
+  // 自然さ: 長さバランス
+  const natural = aw.length? Math.max(0, Math.round(100 - Math.abs(aw.length-rw.length)/rw.length*100)) : 0;
+  const total = Math.round(meaning*0.5 + grammar*0.3 + natural*0.2);
+  const ok = total>=70;
+  recQuiz(compQ.scene, ok);
+  rw.forEach((w,i)=>{ if(!hits[i] && w.length>3) recMissed(w); });
+  document.getElementById("compResult").innerHTML = `
+    ${timeout?'<div class="mock-banner">⏰ 時間切れです</div>':""}
+    <div class="scorebox">
+      <div class="s"><b style="color:${meaning>=70?"var(--ok)":"var(--ng)"}">${meaning}</b><span>意味</span></div>
+      <div class="s"><b style="color:${grammar>=70?"var(--ok)":"var(--ng)"}">${grammar}</b><span>文法（語順）</span></div>
+      <div class="s"><b style="color:${natural>=70?"var(--ok)":"var(--ng)"}">${natural}</b><span>自然さ</span></div>
+    </div>
+    <div class="sheetrow"><b>総合：${total}点</b> ${ok?"⭕":"もう少し！"}</div>
+    <div class="sheetrow"><b>モデル解答：</b>${highlight(ref)}
+      <button class="b" style="padding:2px 10px" onclick="speakText(this)" data-t="${esc(ref)}">🔊</button></div>
+    <div class="note">※簡易採点（単語一致・語順・長さに基づく参考値）です</div>
+    <div class="rowbtns"><button class="b pri" onclick="nextCompose()">次の問題 →</button></div>`;
+}
+
+/* =====================================================
+   F07: AIロールプレイ（台本ベース）
+===================================================== */
+let rp=null, rpTurn=0, rpLog=null;
+function openRoleplay(){
+  practiceScreen(`
+    <h2 class="sec">モードを選択</h2>
+    ${Object.entries(ROLEPLAYS).map(([k,v])=>`
+      <div class="menu-tile" onclick="startRoleplay('${k}')">
+        <span class="ic">${{host:"🪑",nego:"⚖️",estimate:"🧮"}[k]}</span>
+        <div><div class="t">${esc(v.name)}</div><div class="d">${esc(v.desc)}</div></div>
+      </div>`).join("")}
+    <div class="note">※現在はシナリオ台本ベースの練習モードです。Azure OpenAI 接続時に自由会話へ拡張できます。</div>`);
+}
+function startRoleplay(key){
+  rp = ROLEPLAYS[key]; rpTurn=0;
+  rpLog = {mode:rp.name, date:new Date().toLocaleString("ja-JP"), items:[]};
+  practiceScreen(`
+    <div class="card">
+      <div class="meta"><span class="chip">${esc(rp.name)}</span></div>
+      <div class="note">${esc(rp.desc)}</div>
+      <div class="chat" id="rpChat"></div>
+      <div id="rpInput"></div>
+    </div>`);
+  rpNextAi();
+}
+function rpNextAi(){
+  if(rpTurn >= rp.turns.length){ rpFinish(); return; }
+  const t = rp.turns[rpTurn];
+  const chat = document.getElementById("rpChat");
+  chat.insertAdjacentHTML("beforeend", `
+    <div class="msg ai">${highlight(t.ai)}
+      ${S.settings.showJa?`<div class="jah">${esc(t.ja)}</div>`:""}
+      <div class="rowbtns"><button class="b" style="padding:2px 10px;font-size:.72rem" onclick="speakText(this)" data-t="${esc(t.ai)}">🔊</button></div>
+    </div>`);
+  speak(t.ai);
+  document.getElementById("rpInput").innerHTML = `
+    <div class="note">💡 ヒント：${esc(t.hint)}</div>
+    <textarea class="ans" id="rpAns" rows="2" placeholder="英語で応答…"></textarea>
+    <div class="rowbtns">
+      <button class="b pri" onclick="rpReply()">送信</button>
+      ${SR?'<button class="b" id="rpMic" onclick="rpMicIn()">🎙 音声で応答</button>':""}
+    </div>`;
+  chat.scrollIntoView(false);
+}
+function rpMicIn(){
+  const b=document.getElementById("rpMic");
+  b.innerHTML='<span class="rec-ind"></span>聞き取り中…'; b.disabled=true;
+  const rec = makeRecognizer(t=>{
+    document.getElementById("rpAns").value=t;
+    b.disabled=false; b.textContent="🎙 音声で応答";
+  }, ()=>{ const bb=document.getElementById("rpMic"); if(bb){bb.disabled=false; bb.textContent="🎙 音声で応答";} activeRec=null; });
+  activeRec=rec; rec.start();
+}
+function rpReply(){
+  const ans = document.getElementById("rpAns").value.trim();
+  if(!ans){ alert("応答を入力してください"); return; }
+  const t = rp.turns[rpTurn];
+  rpLog.items.push({ai:t.ai, me:ans, sample:t.sample});
+  document.getElementById("rpChat").insertAdjacentHTML("beforeend", `
+    <div class="msg me">${esc(ans)}
+      <div class="sample">📝 模範例：${esc(t.sample)}</div>
+    </div>`);
+  rpTurn++;
+  document.getElementById("rpInput").innerHTML="";
+  setTimeout(rpNextAi, 800);
+}
+function rpFinish(){
+  S.logs.unshift(rpLog); if(S.logs.length>30) S.logs.pop(); save();
+  document.getElementById("rpInput").innerHTML = `
+    <div class="mock-banner" style="background:#e2f5ea;color:var(--ok)">🎉 ロールプレイ完了！会話ログに保存しました。</div>
+    <div class="rowbtns">
+      <button class="b pri" onclick="openRoleplay()">別のモードへ</button>
+      <button class="b" onclick="openLogs()">ログを見る</button>
+    </div>`;
+}
+function openLogs(){
+  practiceScreen(`
+    <h2 class="sec">会話ログ（復習用）</h2>
+    ${S.logs.length? S.logs.map((l,i)=>`
+      <div class="card">
+        <div class="meta"><span class="chip">${esc(l.mode)}</span><span class="chip">${esc(l.date)}</span></div>
+        ${l.items.map(it=>`
+          <div class="sheetrow"><b>AI：</b>${esc(it.ai)}</div>
+          <div class="sheetrow" style="margin-top:2px"><b>自分：</b>${esc(it.me)}<br><span style="font-size:.78rem;color:var(--navy2)">模範例：${esc(it.sample)}</span></div>
+          <hr style="border:none;border-top:1px dashed var(--line)">`).join("")}
+      </div>`).join("") : `<div class="empty">ログはまだありません。ロールプレイを完了すると保存されます。</div>`}`);
+}
+
+/* =====================================================
+   F08: 進捗ダッシュボード
+===================================================== */
+function renderDash(){
+  const st = S.stats;
+  const totalQ = Object.values(st.quiz).reduce((a,q)=>a+q.t,0);
+  const totalC = Object.values(st.quiz).reduce((a,q)=>a+q.c,0);
+  const acc = totalQ? Math.round(100*totalC/totalQ) : 0;
+  const mins = Math.round(st.time/60);
+  const missed = Object.entries(st.missed).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const weak = weakScene();
+  document.getElementById("view-dash").innerHTML = `
+    <div class="statgrid">
+      <div class="stat"><b>${mins}</b><span>学習時間（分）</span></div>
+      <div class="stat"><b>${st.sessions}</b><span>学習セッション</span></div>
+      <div class="stat"><b>${totalQ}</b><span>解答数</span></div>
+      <div class="stat"><b>${acc}%</b><span>正答率</span></div>
+    </div>
+    ${weak?`<div class="mock-banner" style="margin-top:12px">📌 弱点シーン：<b>${esc(weak)}</b> — 出題モード・瞬間英作文で優先的に出題されます</div>`:""}
+    <h2 class="sec">シーン別到達度</h2>
+    <div class="card">
+      ${SCENES.map(sc=>{
+        const q = st.quiz[sc];
+        const r = q&&q.t? Math.round(100*q.c/q.t):0;
+        return `<div class="barrow"><span class="lbl">${sc}</span><span class="bar"><i style="width:${r}%;background:${q&&q.t?(r>=70?"var(--ok)":"var(--ng)"):"var(--line)"}"></i></span><span class="pct">${q&&q.t? r+"%":"—"}</span></div>`;
+      }).join("")}
+    </div>
+    <h2 class="sec">頻出間違い単語</h2>
+    <div class="card">
+      ${missed.length? missed.map(([w,c])=>`<div class="barrow"><span class="lbl">${esc(w)}</span><span class="bar"><i style="width:${Math.min(100,c*20)}%;background:var(--ng)"></i></span><span class="pct">${c}回</span></div>`).join("")
+        : '<div class="empty">まだデータがありません。練習を始めましょう！</div>'}
+    </div>
+    <div class="rowbtns"><button class="b warn" onclick="if(confirm('学習履歴をリセットしますか？')){S.stats={time:0,sessions:1,quiz:{},missed:{}};save();renderDash();}">履歴をリセット</button></div>`;
+}
+
+/* =====================================================
+   その他タブ（F09用語集 / F10インポート / 設定）
+===================================================== */
+function moreTab(name){
+  show("more");
+  ["glossary","import","settings"].forEach(t=>{
+    const b=document.getElementById("mt-"+t); if(b) b.classList.toggle("on", t===name);
+  });
+  if(name==="glossary") renderGlossary();
+  if(name==="import") renderImport();
+  if(name==="settings") renderSettings();
+}
+
+/* F09: 用語集 */
+function renderGlossary(){
+  document.getElementById("moreBody").innerHTML = `
+    <table class="gl">
+      <tr><th>略語</th><th>正式名称</th><th>意味</th><th></th></tr>
+      ${GLOSSARY.map(g=>`<tr><td><b>${esc(g.ab)}</b></td><td>${esc(g.full)}</td><td>${esc(g.mean)}</td>
+        <td><button class="b" style="padding:2px 8px" onclick="speakText(this)" data-t="${esc(g.full)}">🔊</button></td></tr>`).join("")}
+    </table>
+    <div class="note">※システム名・ツール名は仮称で表示しています（仕様書 5.2 / 9章準拠）</div>`;
+}
+
+/* F10: 会議録インポート */
+function renderImport(){
+  document.getElementById("moreBody").innerHTML = `
+    <div class="card">
+      <h2 class="sec" style="margin-top:0">会議録から教材を自動生成</h2>
+      <div class="note">Teams の字幕ファイル（.vtt）またはテキスト（.txt）をアップロードするか、会議録を貼り付けてください。英語発言のみを自動抽出し、話者を匿名化して教材化します。<br>※処理はすべてこの端末内で完結します（外部送信なし）。</div>
+      <input type="file" id="impFile" accept=".vtt,.txt,.docx" style="margin:8px 0">
+      <textarea class="ans" id="impText" rows="6" placeholder="ここに会議録テキストを貼り付け…&#10;例)&#10;Tanaka: We will stick to July on this one.&#10;佐藤: 了解です。"></textarea>
+      <div class="rowbtns"><button class="b pri" onclick="runImport()">🤖 抽出・教材化する</button></div>
+      <div id="impResult"></div>
+    </div>
+    ${(S.userPhrases||[]).length?`
+    <div class="card">
+      <b>取込済みフレーズ：${S.userPhrases.length}件</b>
+      <div class="rowbtns">
+        <button class="b" onclick="show('phrases');curScene='インポート';renderSceneFilter();renderPhrases()">フレーズ集で見る</button>
+        <button class="b warn" onclick="if(confirm('取込フレーズを全削除しますか？')){S.userPhrases=[];save();renderSceneFilter();renderImport();}">全削除</button>
+      </div>
+    </div>`:""}`;
+  document.getElementById("impFile").addEventListener("change", async e=>{
+    const f = e.target.files[0]; if(!f) return;
+    try{
+      let text;
+      if(f.name.toLowerCase().endsWith(".docx")) text = await readDocx(f);
+      else text = await f.text();
+      document.getElementById("impText").value = text;
+    }catch(err){
+      alert("ファイルを読み込めませんでした。.vtt または .txt をお試しください。\n"+err.message);
+    }
+  });
+}
+
+/* .docx 簡易読取（ZIP内 word/document.xml を DecompressionStream で展開） */
+async function readDocx(file){
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let pos = 0;
+  const dec = new TextDecoder();
+  while(pos < buf.length - 4){
+    if(dv.getUint32(pos, true) !== 0x04034b50){ pos++; continue; }
+    const method = dv.getUint16(pos+8, true);
+    const compSize = dv.getUint32(pos+18, true);
+    const nameLen = dv.getUint16(pos+26, true);
+    const extraLen = dv.getUint16(pos+28, true);
+    const name = dec.decode(buf.subarray(pos+30, pos+30+nameLen));
+    const dataStart = pos+30+nameLen+extraLen;
+    if(name === "word/document.xml"){
+      let xmlBytes;
+      const comp = buf.subarray(dataStart, dataStart+compSize);
+      if(method === 0){ xmlBytes = comp; }
+      else{
+        const ds = new DecompressionStream("deflate-raw");
+        const stream = new Blob([comp]).stream().pipeThrough(ds);
+        xmlBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      }
+      const xml = new TextDecoder("utf-8").decode(xmlBytes);
+      return xml.replace(/<\/w:p>/g,"\n").replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">");
+    }
+    pos = dataStart + compSize;
+  }
+  throw new Error("document.xml が見つかりません");
+}
+
+/* 英語発言の抽出・匿名化 */
+let impCandidates = [];
+function runImport(){
+  const raw = document.getElementById("impText").value;
+  if(!raw.trim()){ alert("テキストを入力またはファイルを選択してください"); return; }
+  const lines = raw.split(/\r?\n/);
+  const spMap = {}; let spIdx = 0;
+  const anon = name=>{
+    if(!spMap[name]) spMap[name] = String.fromCharCode(65+(spIdx++ % 26)) + "さん";
+    return spMap[name];
+  };
+  impCandidates = [];
+  for(let line of lines){
+    line = line.trim();
+    if(!line || line==="WEBVTT" || /^\d+$/.test(line)) continue;
+    if(/^\d{2}:\d{2}/.test(line) || line.includes("-->")) continue; // VTTタイムスタンプ
+    let sp = "匿名";
+    const vtt = line.match(/^<v\s+([^>]+)>(.*?)(<\/v>)?$/);      // <v Name>text</v>
+    const col = line.match(/^([A-Za-zぁ-んァ-ヶ一-龠・\s]{1,25})[:：]\s*(.+)$/); // Name: text
+    let text = line;
+    if(vtt){ sp = anon(vtt[1].trim()); text = vtt[2].trim(); }
+    else if(col){ sp = anon(col[1].trim()); text = col[2].trim(); }
+    // 英語判定：英字比率
+    const letters = (text.match(/[A-Za-z]/g)||[]).length;
+    if(text.length>=8 && letters/text.length > 0.6 && words(text).length>=3){
+      // 拠点名の置換（簡易）
+      text = text.replace(/\b(Japan|Tokyo)\b/gi,"日本拠点A").replace(/\b(Manila|Philippines|Cebu)\b/gi,"海外拠点B");
+      impCandidates.push({sp, en:text});
+    }
+  }
+  if(!impCandidates.length){
+    document.getElementById("impResult").innerHTML = '<div class="mock-banner">英語発言を検出できませんでした。「話者名: 英文」形式か .vtt 形式かご確認ください。</div>';
+    return;
+  }
+  document.getElementById("impResult").innerHTML = `
+    <h2 class="sec">検出結果：${impCandidates.length}件（話者は匿名化済み）</h2>
+    ${impCandidates.map((c,i)=>`
+      <label style="display:block;background:#f7f9fc;border-radius:8px;padding:8px;margin-top:6px;font-size:.85rem">
+        <input type="checkbox" checked data-i="${i}" class="impchk">
+        <b>${esc(c.sp)}</b>：${highlight(c.en)}
+      </label>`).join("")}
+    <div class="rowbtns"><button class="b pri" onclick="saveImport()">✓ チェックした発言を教材に追加</button></div>`;
+}
+function saveImport(){
+  const checked = [...document.querySelectorAll(".impchk:checked")].map(c=>impCandidates[+c.dataset.i]);
+  if(!checked.length){ alert("追加する発言を選択してください"); return; }
+  const today = new Date().toISOString().slice(0,10);
+  checked.forEach((c,i)=>{
+    S.userPhrases.push({id:"u"+Date.now()+"_"+i, en:c.en, ja:"", scene:"インポート", sp:c.sp, date:today, bg:"", sim:[]});
+  });
+  save();
+  renderSceneFilter(); renderPhrases(); renderImport();
+  document.getElementById("impResult").innerHTML = `<div class="mock-banner" style="background:#e2f5ea;color:var(--ok)">✓ ${checked.length}件を追加しました。フレーズ集の「インポート」カテゴリで確認できます。</div>`;
+}
+
+/* 設定 */
+function renderSettings(){
+  const st = S.settings;
+  document.getElementById("moreBody").innerHTML = `
+    <div class="setrow"><span>音声（TTS）</span>
+      <select id="voiceSel" onchange="S.settings.voice=this.value;save()">
+        <option value="">自動（en-US）</option>
+        ${VOICES.map(v=>`<option value="${esc(v.name)}" ${v.name===st.voice?"selected":""}>${esc(v.name)}（${esc(v.lang)}）</option>`).join("")}
+      </select></div>
+    <div class="setrow"><span>読み上げ速度 <b id="rateVal">${st.rate.toFixed(1)}x</b></span>
+      <input type="range" min="0.7" max="1.5" step="0.1" value="${st.rate}"
+        oninput="S.settings.rate=+this.value;document.getElementById('rateVal').textContent=(+this.value).toFixed(1)+'x';save()"></div>
+    <div class="setrow"><span>日本語訳（字幕）表示</span>
+      <div class="seg">
+        <button class="${st.showJa?"on":""}" onclick="S.settings.showJa=true;save();renderSettings();renderPhrases()">ON</button>
+        <button class="${!st.showJa?"on":""}" onclick="S.settings.showJa=false;save();renderSettings();renderPhrases()">OFF</button>
+      </div></div>
+    <div class="setrow"><span>文字サイズ</span>
+      <div class="seg">
+        ${["s","m","l"].map(f=>`<button class="${st.fs===f?"on":""}" onclick="setFs('${f}')">${{s:"小",m:"中",l:"大"}[f]}</button>`).join("")}
+      </div></div>
+    <div class="setrow" style="flex-direction:column;align-items:flex-start">
+      <span><b>音声テスト</b></span>
+      <div class="rowbtns"><button class="b pri" onclick="speak('Is my understanding correct?')">🔊 テスト再生</button></div>
+    </div>
+    <div class="note">💡 音声の種類は端末にインストールされている音声エンジンに依存します。フィリピン英語（en-PH）等の音声は、端末の設定で追加できる場合があります。<br>💡 このアプリはブラウザ内で動作し、学習データは端末内にのみ保存されます（外部送信なし）。</div>
+    <div class="note" style="text-align:center">実務直結型 英語学習アプリ v1.0（仕様書 v1.0 準拠 MVP）</div>`;
+}
+function setFs(f){
+  S.settings.fs=f; save();
+  document.documentElement.className="fs-"+f;
+  renderSettings();
+}
+
+/* =====================================================
+   初期化
+===================================================== */
+document.documentElement.className = "fs-"+(S.settings.fs||"m");
+renderSceneFilter();
+renderPhrases();
+renderTeikei();
+if(location.protocol!=="file:" && "serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
