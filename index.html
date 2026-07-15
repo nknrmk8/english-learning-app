@@ -597,6 +597,8 @@ const ROLEPLAYS = {
 ===================================================== */
 const LS_KEY = "ela_state_v1";
 let S = loadState();
+/* 既存ユーザーの保存データに新設定キーを補完 */
+S.settings = Object.assign({rate:1.0, voice:"", showJa:true, fs:"m", maleVoice:"", femaleVoice:"", jaVoice:"", bgm3:false}, S.settings);
 function loadState(){
   try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return s; }catch(e){}
   return {fav:[], stats:{time:0, sessions:0, quiz:{}, missed:{}}, logs:[], userPhrases:[],
@@ -629,9 +631,11 @@ function weakScene(){
 /* =====================================================
    TTS（F04）: Web Speech API
 ===================================================== */
-let VOICES = [];
+let VOICES = [], JA_VOICES = [];
 function refreshVoices(){
-  VOICES = speechSynthesis.getVoices().filter(v=>v.lang.toLowerCase().startsWith("en"));
+  const all = speechSynthesis.getVoices();
+  VOICES = all.filter(v=>v.lang.toLowerCase().startsWith("en"));
+  JA_VOICES = all.filter(v=>v.lang.toLowerCase().startsWith("ja"));
 }
 if("speechSynthesis" in window){
   refreshVoices();
@@ -650,7 +654,67 @@ function speak(text, {onBoundary=null, onEnd=null}={}){
   speechSynthesis.speak(u);
   return u;
 }
-function stopSpeak(){ if("speechSynthesis" in window) speechSynthesis.cancel(); }
+function stopSpeak(){ seqActive=false; if("speechSynthesis" in window) speechSynthesis.cancel(); }
+
+/* ===== 男女判定と音声の選択（3回再生用） ===== */
+const FEMALE_RE = /female|zira|jenny|aria|michelle|ana\b|emma|ava|sonia|libby|natasha|clara|samantha|karen|moira|tessa|serena|susan|linda|heather|hazel|catherine|salli|joanna|kendra|kimberly|ivy|amy|nicole/i;
+const MALE_RE = /male|david|mark|guy|ryan|thomas|andrew|brian|christopher|eric|roger|steve|alex|daniel|fred|george|james|william|liam|matthew|joey|justin|russell/i;
+function guessGender(v){
+  if(FEMALE_RE.test(v.name)) return "female";   // "female"が"male"を含むため先に判定
+  if(MALE_RE.test(v.name)) return "male";
+  return "";
+}
+function pickVoice(kind){
+  if(kind==="ja"){
+    const set = S.settings.jaVoice && JA_VOICES.find(v=>v.name===S.settings.jaVoice);
+    return set || JA_VOICES[0] || null;
+  }
+  const setName = kind==="male" ? S.settings.maleVoice : S.settings.femaleVoice;
+  const set = setName && VOICES.find(v=>v.name===setName);
+  if(set) return set;
+  const v = VOICES.find(v=>guessGender(v)===kind);
+  if(v) return v;
+  /* 判定不能時も別々の声を割り当てる */
+  return kind==="male" ? (VOICES[0]||null) : (VOICES[1]||VOICES[0]||null);
+}
+
+/* ===== 連続発話シーケンス（英・男 → 英・女 → 日本語訳 など） ===== */
+let seqActive=false, seqToken=0;
+function speakSeq(items, onAllEnd){
+  if(!("speechSynthesis" in window)){ alert("この端末は音声合成に対応していません"); return; }
+  stopSpeak();
+  const tok = ++seqToken;
+  seqActive = true;
+  let i = 0;
+  const next = ()=>{
+    if(!seqActive || tok!==seqToken || i>=items.length){
+      if(tok===seqToken){ seqActive=false; if(onAllEnd) onAllEnd(); }
+      return;
+    }
+    const it = items[i++];
+    const u = new SpeechSynthesisUtterance(it.text);
+    u.lang = it.lang || "en-US";
+    if(it.voice) u.voice = it.voice;
+    u.rate = it.rate || 1.0;
+    if(it.onBoundary) u.onboundary = it.onBoundary;
+    u.onend = ()=>{ if(it.onEnd) it.onEnd(); setTimeout(next, 400); };
+    u.onerror = ()=>setTimeout(next, 400);
+    speechSynthesis.speak(u);
+  };
+  next();
+}
+/* 3回再生の共通アイテム生成：英語(男)→英語(女)→日本語訳 */
+function tripleItems(en, ja, onBoundary, onEnd){
+  const items = [
+    {text:en, voice:pickVoice("male"), lang:"en-US", rate:S.settings.rate, onBoundary, onEnd},
+    {text:en, voice:pickVoice("female"), lang:"en-US", rate:S.settings.rate, onBoundary, onEnd},
+  ];
+  if(ja) items.push({text:ja, voice:pickVoice("ja"), lang:"ja-JP", rate:1.0});
+  return items;
+}
+function speakText3(btn){
+  speakSeq(tripleItems(btn.dataset.t, btn.dataset.j||""));
+}
 
 /* =====================================================
    音声認識（F05）: Web Speech API
@@ -734,6 +798,7 @@ function renderPhrases(){
       ${p.bg ? `<div class="bg">💡 ${esc(p.bg)}</div>` : ""}
       <div class="rowbtns">
         <button class="b pri" onclick="playPhrase('${p.id}')">🔊 再生</button>
+        <button class="b pri" style="background:var(--navy2)" onclick="playPhrase3('${p.id}')">🔊×3 男女＋訳</button>
         ${p.sim && p.sim.length ? `<button class="b" onclick="document.getElementById('sim-${p.id}').classList.toggle('open')">類似表現</button>` : ""}
       </div>
       ${p.sim && p.sim.length ? `<div class="simbox" id="sim-${p.id}">${p.sim.map(s=>`<div>・${highlight(s)} <button class="b" style="padding:2px 8px;font-size:.7rem" onclick="speakText(this)" data-t="${esc(s)}">🔊</button></div>`).join("")}</div>`:""}
@@ -741,12 +806,10 @@ function renderPhrases(){
 }
 function speakText(btn){ speak(btn.dataset.t); }
 
-/* 再生（読み上げ位置ハイライト連動） */
-function playPhrase(id){
-  const p = allPhrases().find(x=>x.id===id);
-  if(!p) return;
-  const el = document.getElementById("en-"+id);
-  // 単語spanに分解（tierハイライトは維持しつつwordインデックスを付与）
+/* 読み上げ位置ハイライト用に英文を単語spanへ分解 */
+function prepSpans(p){
+  const el = document.getElementById("en-"+p.id);
+  if(!el) return {onBoundary:null, clear:()=>{}};
   const tokens = p.en.split(/(\s+)/);
   let charPos = 0;
   el.innerHTML = tokens.map(tk=>{
@@ -755,15 +818,31 @@ function playPhrase(id){
     return `<span class="pw" data-s="${start}">${highlight(tk)}</span>`;
   }).join("");
   const spans = [...el.querySelectorAll(".pw")];
-  speak(p.en, {
+  return {
     onBoundary: e=>{
       spans.forEach(s=>s.classList.remove("w-play"));
       let target=null;
       for(const s of spans){ if(+s.dataset.s <= e.charIndex) target=s; }
       if(target) target.classList.add("w-play");
     },
-    onEnd: ()=>{ spans.forEach(s=>s.classList.remove("w-play")); }
-  });
+    clear: ()=>spans.forEach(s=>s.classList.remove("w-play"))
+  };
+}
+
+/* 再生（読み上げ位置ハイライト連動） */
+function playPhrase(id){
+  const p = allPhrases().find(x=>x.id===id);
+  if(!p) return;
+  const h = prepSpans(p);
+  speak(p.en, {onBoundary:h.onBoundary, onEnd:h.clear});
+}
+
+/* 3回再生：英語（男性）→英語（女性）→日本語訳 */
+function playPhrase3(id){
+  const p = allPhrases().find(x=>x.id===id);
+  if(!p) return;
+  const h = prepSpans(p);
+  speakSeq(tripleItems(p.en, p.ja, h.onBoundary, h.clear), h.clear);
 }
 
 /* 連続再生（BGM学習モード） */
@@ -781,11 +860,17 @@ function playNext(){
   const p = list[playIdx];
   const card = document.getElementById("card-"+p.id);
   if(card){ card.scrollIntoView({behavior:"smooth", block:"center"}); card.style.outline="2px solid var(--accent)"; }
-  speak(p.en, {onEnd: ()=>{
+  const advance = ()=>{
     if(card) card.style.outline="";
     playIdx++;
     setTimeout(playNext, 700);
-  }});
+  };
+  if(S.settings.bgm3){
+    const h = prepSpans(p);
+    speakSeq(tripleItems(p.en, p.ja, h.onBoundary, h.clear), ()=>{ h.clear(); advance(); });
+  }else{
+    speak(p.en, {onEnd: advance});
+  }
 }
 function stopPlayAll(updateBtn){
   playingAll = false;
@@ -840,7 +925,10 @@ function renderTeikei(){
       </div>
       <div class="en">${highlight(t.en)}</div>
       <div class="ja">${esc(t.ja)}</div>
-      <div class="rowbtns"><button class="b pri" onclick="speakText(this)" data-t="${esc(t.en)}">🔊 再生</button></div>
+      <div class="rowbtns">
+        <button class="b pri" onclick="speakText(this)" data-t="${esc(t.en)}">🔊 再生</button>
+        <button class="b pri" style="background:var(--navy2)" onclick="speakText3(this)" data-t="${esc(t.en)}" data-j="${esc(t.ja)}">🔊×3 男女＋訳</button>
+      </div>
     </div>`).join("") || `<div class="empty">お気に入りはまだありません。☆をタップして登録できます。</div>`;
 }
 function toggleFav(id){
@@ -1327,11 +1415,31 @@ function saveImport(){
 function renderSettings(){
   const st = S.settings;
   document.getElementById("moreBody").innerHTML = `
-    <div class="setrow"><span>音声（TTS）</span>
+    <div class="setrow"><span>音声（通常再生）</span>
       <select id="voiceSel" onchange="S.settings.voice=this.value;save()">
         <option value="">自動（en-US）</option>
         ${VOICES.map(v=>`<option value="${esc(v.name)}" ${v.name===st.voice?"selected":""}>${esc(v.name)}（${esc(v.lang)}）</option>`).join("")}
       </select></div>
+    <div class="setrow"><span>×3再生・男性音声</span>
+      <select onchange="S.settings.maleVoice=this.value;save()">
+        <option value="">自動判定</option>
+        ${VOICES.map(v=>{const g=guessGender(v);return `<option value="${esc(v.name)}" ${v.name===st.maleVoice?"selected":""}>${esc(v.name)}（${esc(v.lang)}${g?"・"+(g==="male"?"男":"女"):""}）</option>`;}).join("")}
+      </select></div>
+    <div class="setrow"><span>×3再生・女性音声</span>
+      <select onchange="S.settings.femaleVoice=this.value;save()">
+        <option value="">自動判定</option>
+        ${VOICES.map(v=>{const g=guessGender(v);return `<option value="${esc(v.name)}" ${v.name===st.femaleVoice?"selected":""}>${esc(v.name)}（${esc(v.lang)}${g?"・"+(g==="male"?"男":"女"):""}）</option>`;}).join("")}
+      </select></div>
+    <div class="setrow"><span>×3再生・日本語音声</span>
+      <select onchange="S.settings.jaVoice=this.value;save()">
+        <option value="">自動（ja-JP）</option>
+        ${JA_VOICES.map(v=>`<option value="${esc(v.name)}" ${v.name===st.jaVoice?"selected":""}>${esc(v.name)}（${esc(v.lang)}）</option>`).join("")}
+      </select></div>
+    <div class="setrow"><span>連続再生（BGM）も×3で再生</span>
+      <div class="seg">
+        <button class="${st.bgm3?"on":""}" onclick="S.settings.bgm3=true;save();renderSettings()">ON</button>
+        <button class="${!st.bgm3?"on":""}" onclick="S.settings.bgm3=false;save();renderSettings()">OFF</button>
+      </div></div>
     <div class="setrow"><span>読み上げ速度 <b id="rateVal">${st.rate.toFixed(1)}x</b></span>
       <input type="range" min="0.7" max="1.5" step="0.1" value="${st.rate}"
         oninput="S.settings.rate=+this.value;document.getElementById('rateVal').textContent=(+this.value).toFixed(1)+'x';save()"></div>
@@ -1346,7 +1454,10 @@ function renderSettings(){
       </div></div>
     <div class="setrow" style="flex-direction:column;align-items:flex-start">
       <span><b>音声テスト</b></span>
-      <div class="rowbtns"><button class="b pri" onclick="speak('Is my understanding correct?')">🔊 テスト再生</button></div>
+      <div class="rowbtns">
+        <button class="b pri" onclick="speak('Is my understanding correct?')">🔊 通常</button>
+        <button class="b pri" style="background:var(--navy2)" onclick="speakSeq(tripleItems('Is my understanding correct?','私の理解で合っていますか？'))">🔊×3 男女＋訳</button>
+      </div>
     </div>
     <div class="note">💡 音声の種類は端末にインストールされている音声エンジンに依存します。フィリピン英語（en-PH）等の音声は、端末の設定で追加できる場合があります。<br>💡 このアプリはブラウザ内で動作し、学習データは端末内にのみ保存されます（外部送信なし）。</div>
     <div class="note" style="text-align:center">実務直結型 英語学習アプリ v1.0（仕様書 v1.0 準拠 MVP）</div>`;
