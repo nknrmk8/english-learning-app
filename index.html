@@ -140,7 +140,8 @@ table.gl td{padding:8px; border-bottom:1px solid var(--line); vertical-align:top
     </div>
     <div class="filterbar" id="sceneFilter"></div>
     <div class="rowbtns" style="margin:0 0 12px">
-      <button class="b pri" id="btnPlayAll" onclick="togglePlayAll()">▶ 連続再生（BGM学習）</button>
+      <button class="b pri" id="btnPlayAll" onclick="togglePlayAll(false)">▶ 連続再生</button>
+      <button class="b pri" style="background:var(--navy2)" id="btnPlayAll3" onclick="togglePlayAll(true)">▶×3 連続再生（男女＋訳）</button>
     </div>
     <div id="phraseList"></div>
   </section>
@@ -598,7 +599,7 @@ const ROLEPLAYS = {
 const LS_KEY = "ela_state_v1";
 let S = loadState();
 /* 既存ユーザーの保存データに新設定キーを補完 */
-S.settings = Object.assign({rate:1.0, voice:"", showJa:true, fs:"m", maleVoice:"", femaleVoice:"", jaVoice:"", bgm3:false}, S.settings);
+S.settings = Object.assign({rate:1.0, voice:"", showJa:true, fs:"m", maleVoice:"", femaleVoice:"", jaVoice:""}, S.settings);
 function loadState(){
   try{ const s = JSON.parse(localStorage.getItem(LS_KEY)); if(s) return s; }catch(e){}
   return {fav:[], stats:{time:0, sessions:0, quiz:{}, missed:{}}, logs:[], userPhrases:[],
@@ -720,13 +721,33 @@ function speakText3(btn){
    音声認識（F05）: Web Speech API
 ===================================================== */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let recTimer = null;
 function makeRecognizer(onResult, onEnd){
   const r = new SR();
-  r.lang="en-US"; r.interimResults=false; r.maxAlternatives=1;
-  r.onresult = e=>onResult(e.results[0][0].transcript);
+  r.lang="en-US"; r.interimResults=false; r.maxAlternatives=1; r.continuous=false;
+  r.onresult = e=>{
+    try{ r.stop(); }catch(err){}   // 結果取得後は即マイクを解放
+    onResult(e.results[0][0].transcript);
+  };
   r.onerror = e=>{ if(onEnd) onEnd(e.error); };
-  r.onend = ()=>{ if(onEnd) onEnd(); };
+  r.onend = ()=>{
+    if(activeRec===r) activeRec=null;              // 参照を解放
+    if(recTimer){ clearTimeout(recTimer); recTimer=null; }
+    if(onEnd) onEnd();
+  };
   return r;
+}
+/* 認識開始（12秒で自動停止するセーフティ付き） */
+function startRec(rec){
+  stopRec();
+  activeRec = rec;
+  rec.start();
+  recTimer = setTimeout(()=>{ if(activeRec===rec){ try{rec.stop();}catch(e){} } }, 12000);
+}
+/* マイクを確実に停止・解放 */
+function stopRec(){
+  if(recTimer){ clearTimeout(recTimer); recTimer=null; }
+  if(activeRec){ try{activeRec.abort();}catch(e){} activeRec=null; }
 }
 
 /* =====================================================
@@ -761,7 +782,7 @@ function highlight(text){
    画面切替
 ===================================================== */
 function show(name){
-  stopSpeak(); stopPlayAll(false);
+  stopSpeak(); stopPlayAll(false); stopRec();
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll("nav button").forEach(b=>b.classList.remove("on"));
   document.getElementById("view-"+name).classList.add("active");
@@ -845,12 +866,13 @@ function playPhrase3(id){
   speakSeq(tripleItems(p.en, p.ja, h.onBoundary, h.clear), h.clear);
 }
 
-/* 連続再生（BGM学習モード） */
-let playingAll = false, playIdx = 0;
-function togglePlayAll(){
+/* 連続再生（BGM学習モード）: triple=true で 英男→英女→訳 の×3再生 */
+let playingAll = false, playIdx = 0, playMode3 = false;
+function togglePlayAll(triple){
   if(playingAll){ stopPlayAll(true); return; }
-  playingAll = true; playIdx = 0;
-  document.getElementById("btnPlayAll").textContent = "⏸ 停止";
+  playingAll = true; playIdx = 0; playMode3 = !!triple;
+  const btn = document.getElementById(triple ? "btnPlayAll3" : "btnPlayAll");
+  if(btn) btn.textContent = "⏸ 停止";
   playNext();
 }
 function playNext(){
@@ -865,7 +887,7 @@ function playNext(){
     playIdx++;
     setTimeout(playNext, 700);
   };
-  if(S.settings.bgm3){
+  if(playMode3){
     const h = prepSpans(p);
     speakSeq(tripleItems(p.en, p.ja, h.onBoundary, h.clear), ()=>{ h.clear(); advance(); });
   }else{
@@ -874,7 +896,10 @@ function playNext(){
 }
 function stopPlayAll(updateBtn){
   playingAll = false;
-  if(updateBtn){ stopSpeak(); const b=document.getElementById("btnPlayAll"); if(b) b.textContent="▶ 連続再生（BGM学習）"; }
+  if(updateBtn) stopSpeak();
+  const b = document.getElementById("btnPlayAll"), b3 = document.getElementById("btnPlayAll3");
+  if(b) b.textContent = "▶ 連続再生";
+  if(b3) b3.textContent = "▶×3 連続再生（男女＋訳）";
   document.querySelectorAll(".card").forEach(c=>c.style.outline="");
 }
 
@@ -977,13 +1002,12 @@ function answerTeikei(btn, id){
    練習メニュー共通
 ===================================================== */
 function resetPractice(){
-  stopSpeak();
+  stopSpeak(); stopRec();
   document.getElementById("practiceMenu").style.display="block";
   document.getElementById("practiceBody").innerHTML="";
-  if(activeRec){ try{activeRec.abort();}catch(e){} activeRec=null; }
 }
 function practiceScreen(html){
-  stopSpeak();
+  stopSpeak(); stopRec();
   document.getElementById("practiceMenu").style.display="none";
   document.getElementById("practiceBody").innerHTML =
     `<button class="back" onclick="resetPractice()">← 練習メニューに戻る</button>` + html;
@@ -1032,8 +1056,7 @@ function startShadowRec(){
         `<div class="mock-banner">音声を取得できませんでした（${esc(String(err))}）。マイク許可をご確認ください。</div>`;
       activeRec=null;
     });
-  activeRec = rec;
-  rec.start();
+  startRec(rec);
 }
 function showShadowScore(transcript){
   const {score, hits, rw} = matchScore(shadowP.en, transcript);
@@ -1106,8 +1129,8 @@ function composeMic(){
     document.getElementById("compAns").value=t;
     b.disabled=false; b.textContent="🎙 音声で答える";
     gradeCompose();
-  }, ()=>{ b.disabled=false; b.textContent="🎙 音声で答える"; activeRec=null; });
-  activeRec=rec; rec.start();
+  }, ()=>{ b.disabled=false; b.textContent="🎙 音声で答える"; });
+  startRec(rec);
 }
 function gradeCompose(timeout=false){
   clearInterval(compTimer);
@@ -1195,8 +1218,8 @@ function rpMicIn(){
   const rec = makeRecognizer(t=>{
     document.getElementById("rpAns").value=t;
     b.disabled=false; b.textContent="🎙 音声で応答";
-  }, ()=>{ const bb=document.getElementById("rpMic"); if(bb){bb.disabled=false; bb.textContent="🎙 音声で応答";} activeRec=null; });
-  activeRec=rec; rec.start();
+  }, ()=>{ const bb=document.getElementById("rpMic"); if(bb){bb.disabled=false; bb.textContent="🎙 音声で応答";} });
+  startRec(rec);
 }
 function rpReply(){
   const ans = document.getElementById("rpAns").value.trim();
@@ -1435,11 +1458,6 @@ function renderSettings(){
         <option value="">自動（ja-JP）</option>
         ${JA_VOICES.map(v=>`<option value="${esc(v.name)}" ${v.name===st.jaVoice?"selected":""}>${esc(v.name)}（${esc(v.lang)}）</option>`).join("")}
       </select></div>
-    <div class="setrow"><span>連続再生（BGM）も×3で再生</span>
-      <div class="seg">
-        <button class="${st.bgm3?"on":""}" onclick="S.settings.bgm3=true;save();renderSettings()">ON</button>
-        <button class="${!st.bgm3?"on":""}" onclick="S.settings.bgm3=false;save();renderSettings()">OFF</button>
-      </div></div>
     <div class="setrow"><span>読み上げ速度 <b id="rateVal">${st.rate.toFixed(1)}x</b></span>
       <input type="range" min="0.7" max="1.5" step="0.1" value="${st.rate}"
         oninput="S.settings.rate=+this.value;document.getElementById('rateVal').textContent=(+this.value).toFixed(1)+'x';save()"></div>
@@ -1473,9 +1491,9 @@ function setFs(f){
 ===================================================== */
 /* 別アプリ・別タブに移ったら音声を停止（BGM連続再生モード中は継続） */
 document.addEventListener("visibilitychange", ()=>{
-  if(document.visibilityState==="hidden" && !playingAll){
-    stopSpeak();
-    if(activeRec){ try{activeRec.abort();}catch(e){} activeRec=null; }
+  if(document.visibilityState==="hidden"){
+    stopRec();                       // マイクは必ず解放
+    if(!playingAll) stopSpeak();     // BGM連続再生中のみ音声は継続
   }
 });
 
