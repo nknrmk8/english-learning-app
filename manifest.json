@@ -1,7 +1,7 @@
 {
-  "name": "実務直結型 英語学習アプリ",
-  "short_name": "実務英語",
-  "description": "実会議データを活用した実務直結型英語学習",
+  "name": "Meeting English Trainer｜ビジネス会議英語トレーニング",
+  "short_name": "会議英語",
+  "description": "システム開発・開発委託の会議を英語で進めるための実務直結トレーニング",
   "lang": "ja",
   "start_url": "./index.html",
   "scope": "./",
@@ -10,7 +10,17 @@
   "background_color": "#16294d",
   "theme_color": "#16294d",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
