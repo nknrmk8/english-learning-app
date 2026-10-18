@@ -36,9 +36,6 @@
   --maxw:760px;
   --nav-h:62px;
 }
-:root:not([data-theme="light"]){
-  @media (prefers-color-scheme: dark){ }
-}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme: dark;
@@ -151,6 +148,8 @@ h2.sec:first-child{margin-top:4px}
 }
 .card.flat{box-shadow:none}
 .card.pad-s{padding:12px}
+button.card{font:inherit; color:inherit}
+button.card:active{transform:scale(.995)}
 .card-head{display:flex; align-items:center; gap:9px; margin-bottom:9px}
 .card-head .t{font-weight:700; font-size:.95rem}
 
@@ -233,7 +232,7 @@ label.fld > span{display:block; font-size:.78rem; color:var(--text-sub); margin-
 .bar{height:9px; background:var(--line); border-radius:var(--r-pill); overflow:hidden}
 .bar > i{display:block; height:100%; background:var(--accent); border-radius:var(--r-pill); transition:width .4s}
 .barrow{display:flex; align-items:center; gap:9px; margin:8px 0; font-size:.8rem}
-.barrow .lbl{width:8em; flex:none; color:var(--text-sub); font-weight:600}
+.barrow .lbl{width:8em; flex:none; color:var(--text-sub); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .barrow .bar{flex:1}
 .barrow .val{width:3.4em; text-align:right; flex:none; font-variant-numeric:tabular-nums; font-weight:700}
 
@@ -258,6 +257,7 @@ label.fld > span{display:block; font-size:.78rem; color:var(--text-sub); margin-
 .steptab.on{background:var(--brand); color:var(--brand-ink); border-color:transparent}
 .steptab.done{border-color:var(--ok); color:var(--ok)}
 .steptab.done.on{background:var(--ok); color:#fff}
+.steptab:disabled{opacity:.5; cursor:not-allowed}
 
 .voicecard{
   display:flex; align-items:center; gap:11px; padding:12px;

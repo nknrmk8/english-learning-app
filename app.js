@@ -9,10 +9,11 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&a
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9'\s]/g, " ").replace(/\s+/g, " ").trim();
 const words = s => norm(s).split(" ").filter(Boolean);
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const dateKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayKey = () => dateKey(new Date());
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(v => v[1]);
-const fmtMin = sec => sec < 60 ? "0" : String(Math.round(sec / 60));
+const fmtMin = sec => !sec ? "0" : sec < 60 ? "<1" : String(Math.round(sec / 60));
 
 /* ---------- storage ---------- */
 const APP_KEY = "met_app_v2";
@@ -46,7 +47,23 @@ function loadProfile(id) {
   for (const k in b.skills) if (!Array.isArray(P.skills[k])) P.skills[k] = [];
   for (const k in b.weak) if (!P.weak[k]) P.weak[k] = {};
 }
-function save() { try { localStorage.setItem(PKEY, JSON.stringify(P)); } catch (e) { } }
+let _quotaWarned = false;
+function save() {
+  if (!P || !PKEY) return;
+  try { localStorage.setItem(PKEY, JSON.stringify(P)); return; } catch (e) { }
+  // 容量超過: 古いログ・録音メタを間引いて再試行
+  try {
+    if (P.logs && P.logs.length > 5) P.logs = P.logs.slice(0, 5);
+    if (P.recordings && P.recordings.length > 10) {
+      P.recordings.slice(10).forEach(r => recDel(r.id));
+      P.recordings = P.recordings.slice(0, 10);
+    }
+    localStorage.setItem(PKEY, JSON.stringify(P));
+    if (!_quotaWarned) { _quotaWarned = true; toast("保存容量が不足したため、古いログを整理しました"); }
+  } catch (e2) {
+    if (!_quotaWarned) { _quotaWarned = true; toast("学習データを保存できませんでした（端末の空き容量をご確認ください）"); }
+  }
+}
 
 /* ---------- session timer ---------- */
 let tickTimer = null;
@@ -68,7 +85,7 @@ function weekStats() {
   const now = new Date();
   for (let i = 0; i < 7; i++) {
     const d = new Date(now); d.setDate(now.getDate() - i);
-    const s = P.sessions[d.toISOString().slice(0, 10)];
+    const s = P.sessions[dateKey(d)];
     if (s) { out.sec += s.sec; out.lessons += s.lessons; out.utter += s.utter; out.correct += s.correct; out.total += s.total; if (s.sec > 30) out.days++; }
   }
   return out;
@@ -214,30 +231,27 @@ async function listenOnce(onDone, onErr) {
   if (!SR) { if (onErr) onErr("unsupported"); return; }
   stopRec();
   recChunks = []; recStartAt = Date.now();
-  // 録音（任意・失敗しても認識は続行）
-  try {
-    if (navigator.mediaDevices && window.MediaRecorder) {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRec = new MediaRecorder(mediaStream);
-      mediaRec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
-      mediaRec.start();
-    }
-  } catch (e) { mediaRec = null; }
 
   const rec = new SR();
   rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
   let finished = false;
+
   const finish = (txt, conf) => {
     if (finished) return; finished = true;
     const sec = (Date.now() - recStartAt) / 1000;
-    const blobs = recChunks.slice();
     const type = (mediaRec && mediaRec.mimeType) || "audio/webm";
-    stopMedia();
-    setTimeout(() => {
-      const blob = blobs.length ? new Blob(blobs, { type }) : null;
+    const deliver = () => {
+      const blob = recChunks.length ? new Blob(recChunks, { type }) : null;
+      recChunks = [];
       onDone(txt, conf, blob, sec);
-    }, 120);
+    };
+    // dataavailable は stop() 後に発火するため、onstop を待ってから Blob を組み立てる
+    if (mediaRec && mediaRec.state !== "inactive") {
+      mediaRec.onstop = () => { stopMedia(); deliver(); };
+      try { mediaRec.stop(); } catch (e) { stopMedia(); deliver(); }
+    } else { stopMedia(); deliver(); }
   };
+
   rec.onresult = e => {
     try { rec.stop(); } catch (err) { }
     const r = e.results[0][0];
@@ -246,17 +260,29 @@ async function listenOnce(onDone, onErr) {
   rec.onerror = e => {
     if (activeRec === rec) activeRec = null;
     if (recTimer) { clearTimeout(recTimer); recTimer = null; }
-    stopMedia();
-    if (!finished) { finished = true; if (onErr) onErr(e.error); }
+    if (!finished) { finished = true; stopMedia(); if (onErr) onErr(e.error); }
   };
   rec.onend = () => {
     if (activeRec === rec) activeRec = null;
     if (recTimer) { clearTimeout(recTimer); recTimer = null; }
     if (!finished) { finished = true; stopMedia(); if (onErr) onErr(null); }
   };
+
   activeRec = rec;
   try { rec.start(); } catch (e) { stopMedia(); if (onErr) onErr("start-failed"); return; }
   recTimer = setTimeout(() => { if (activeRec === rec) { try { rec.stop(); } catch (e) { } } }, 15000);
+
+  // 録音はベストエフォート。認識を妨げないよう開始後に取得する
+  if (navigator.mediaDevices && window.MediaRecorder) {
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (finished || activeRec !== rec) { st.getTracks().forEach(t => { try { t.stop(); } catch (e) { } }); return; }
+      mediaStream = st;
+      mediaRec = new MediaRecorder(st);
+      mediaRec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+      mediaRec.start();
+    } catch (e) { mediaRec = null; }
+  }
 }
 
 /* =========================================================
@@ -277,7 +303,7 @@ function lcsLen(a, b) {
   return prev[n];
 }
 /* ref: 目標英文, hyp: 認識結果, keys: 重要表現, sec: 発話秒数 */
-function evaluate(ref, hyp, keys, sec, conf) {
+function evaluate(ref, hyp, keys, sec, conf, alts) {
   const rw = words(ref), hw = words(hyp);
   const hset = new Set(hw);
   const hits = rw.map(w => hset.has(w));
@@ -307,14 +333,16 @@ function evaluate(ref, hyp, keys, sec, conf) {
   else if (wps < 1.2) rateScore = 45 + wps / 1.2 * 35;       // 遅い
   else if (wps <= 3.2) rateScore = 100;                      // 自然
   else rateScore = Math.max(55, 100 - (wps - 3.2) * 22);     // 速すぎ
-  const fillerN = FILLERS.filter(f => nh.includes(f)).length;
+  const hset2 = new Set(hw);
+  const fillerN = FILLERS.filter(f => f.includes(" ") ? nh.includes(f) : hset2.has(f)).length;
   const lenRatio = rw.length ? hw.length / rw.length : 0;
   const lenPen = lenRatio < 0.55 ? (0.55 - lenRatio) * 90 : (lenRatio > 1.8 ? (lenRatio - 1.8) * 40 : 0);
   const fluency = Math.round(clamp(rateScore - fillerN * 9 - lenPen, 0, 100));
   // 会議表現としての自然さ
-  const refPolite = POLITE.filter(p => norm(ref).includes(p)).length;
+  const nr = norm(ref);
+  const refPolite = POLITE.filter(p => nr.includes(p)).length;
   const hypPolite = POLITE.filter(p => nh.includes(p)).length;
-  const casualN = CASUAL.filter(c => nh.includes(c)).length;
+  const casualN = CASUAL.filter(c => c.includes(" ") ? nh.includes(c) : hset2.has(c)).length;
   let naturalness = Math.round(grammar * 0.55 + vocabulary * 0.25 + 20);
   if (refPolite > 0) naturalness += hypPolite > 0 ? 8 : -16;
   naturalness -= casualN * 12;
@@ -323,11 +351,25 @@ function evaluate(ref, hyp, keys, sec, conf) {
   const total = Math.round(accuracy * 0.26 + grammar * 0.2 + vocabulary * 0.16 + pronunciation * 0.16 + fluency * 0.1 + naturalness * 0.12);
   const missed = rw.filter((w, i) => !hits[i] && w.length > 3);
 
-  // 改善英文
+  // 改善英文: 学習者の発話に近い言い回しを候補から選び、会議向けの言い換えとして示す
+  let closest = null, cs = -1;
+  (alts || []).forEach(a => {
+    const aw = words(a), sc2 = aw.length ? lcsLen(aw, hw) / aw.length : 0;
+    if (sc2 > cs) { cs = sc2; closest = a; }
+  });
+  const refLcs = rw.length ? lcsLen(rw, hw) / rw.length : 0;
   let advice;
-  if (total >= 85) advice = { label: "とても自然です。この表現で会議でも通用します。", text: ref };
-  else if (accuracy >= 55) advice = { label: "意味は通じます。会議ではこちらがより自然です。", text: ref };
-  else advice = { label: "まずはモデル英文をそのまま言えるように練習しましょう。", text: ref };
+  if (total >= 85) {
+    advice = { label: "とても自然です。この表現で会議でも通用します。", text: ref };
+  } else if (closest && cs > refLcs + 0.1) {
+    advice = { label: "あなたの言い方に近く、会議でも自然なのはこちらです。", text: closest, also: ref };
+  } else if (casualN > 0) {
+    advice = { label: "くだけた語が混ざっています。会議ではこう言いましょう。", text: ref };
+  } else if (accuracy >= 55) {
+    advice = { label: "意味は通じます。会議ではこちらの方が自然です。", text: ref, also: closest };
+  } else {
+    advice = { label: "まずはモデル英文をそのまま言えるように練習しましょう。", text: ref };
+  }
 
   return { accuracy, grammar, vocabulary, pronunciation, fluency, naturalness, total, hits, rw, missed, wps, advice };
 }
@@ -400,8 +442,8 @@ function go(name, opt) {
   CUR = name;
   document.querySelectorAll("#app .view").forEach(v => v.classList.remove("active"));
   const el = $("v-" + name); if (el) el.classList.add("active");
-  document.querySelectorAll(".tabbar button").forEach(b => b.classList.remove("on"));
-  const t = $("t-" + name); if (t) t.classList.add("on");
+  document.querySelectorAll(".tabbar button").forEach(b => { b.classList.remove("on"); b.setAttribute("aria-current", "false"); });
+  const t = $("t-" + name); if (t) { t.classList.add("on"); t.setAttribute("aria-current", "page"); }
   $("barTitle").textContent = TITLES[name] || name;
   window.scrollTo(0, 0);
   const R = { home: renderHome, scenarios: renderScenarios, review: renderReview, phrases: renderPhrases, progress: renderProgress, roleplay: renderRoleplayMenu, settings: renderSettings };
@@ -446,6 +488,10 @@ function showNewProfile() {
       <button class="btn ghost" onclick="renderLogin()">キャンセル</button>
     </div>`;
   setTimeout(() => $("npName") && $("npName").focus(), 60);
+  ["npName", "npPass"].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); createProfile(); } });
+  });
 }
 function createProfile() {
   const name = ($("npName").value || "").trim();
@@ -485,7 +531,14 @@ function removeProfile(id) {
   saveApp(); try { localStorage.removeItem("met_p_" + id); } catch (e) { }
   renderLogin();
 }
-function logout() { stopSpeak(); stopRec(); APP.current = null; saveApp(); $("app").hidden = true; $("login").classList.add("active"); renderLogin(); }
+function logout() {
+  stopSpeak(); stopRec();
+  clearInterval(tickTimer); tickTimer = null;
+  save();                     // 解放前に最後の状態を保存
+  P = null; PKEY = "";
+  APP.current = null; saveApp();
+  $("app").hidden = true; $("login").classList.add("active"); renderLogin();
+}
 
 function enterApp(id) {
   loadProfile(id);
@@ -599,7 +652,7 @@ function renderScenarios() {
     </div>
     ${list.length ? list.map(s => {
       const p = scenarioProgress(s);
-      return `<div class="card" style="cursor:pointer" onclick="openScenario('${s.id}')">
+      return `<button type="button" class="card" style="cursor:pointer;width:100%;text-align:left;display:block;font:inherit;color:inherit" onclick="openScenario('${s.id}')">
         <div class="chips" style="margin-bottom:7px">
           <span class="chip cat">${catIcon(s.cat)} ${esc(catName(s.cat))}</span>
           <span class="chip ${lvClass(s.level)}">${esc(s.level)}</span>
@@ -609,7 +662,7 @@ function renderScenarios() {
         <div class="note" style="margin-top:4px">${esc(s.desc || "")}</div>
         <div style="margin-top:10px" class="bar"><i style="width:${p.pct}%;background:${p.pct === 100 ? "var(--ok)" : "var(--accent)"}"></i></div>
         <div class="note" style="margin-top:5px">${p.total} ステップ・${p.done} 完了</div>
-      </div>`;
+      </button>`;
     }).join("") : `<div class="empty"><span class="big">🔍</span>該当するシナリオがありません</div>`}`;
 }
 
@@ -649,15 +702,17 @@ function renderStudy() {
         <span class="chip ${lvClass(p.level)}">${esc(p.level)}</span>
         <span class="chip">${ST.idx + 1} / ${ST.sc.steps.length}</span>
         ${rec.done ? '<span class="chip ok">✓ 習得済み</span>' : ""}
-        <button class="chip" style="cursor:pointer;margin-left:auto" onclick="toggleSave('${p.id}')">${saved ? "★ 保存済み" : "☆ 保存"}</button>
+        <button class="chip" style="cursor:pointer;margin-left:auto" onclick="toggleSave('${p.id}')" aria-pressed="${saved}">${saved ? "★ 保存済み" : "☆ 保存"}</button>
       </div>
       ${stp.note ? `<div class="note" style="margin-top:7px">🎯 この発言のねらい：${esc(stp.note)}</div>` : ""}
-      <div class="bar" style="margin-top:9px"><i style="width:${Math.round(100 * (ST.idx) / ST.sc.steps.length)}%"></i></div>
+      <div class="bar" style="margin-top:9px"><i style="width:${Math.round(100 * ST.sc.steps.filter(x => phraseDone(x.phrase)).length / ST.sc.steps.length)}%"></i></div>
     </div>
 
     <div class="steps">
-      ${[1, 2, 3].map(n => `<button class="steptab ${ST.step === n ? "on" : ""} ${stepDone(n) ? "done" : ""}" onclick="gotoStep(${n})">
-        <span class="n">STEP ${n}</span>${["英語を聞く×3", "日本語を聞く", "自分で話す"][n - 1]}</button>`).join("")}
+      ${[1, 2, 3].map(n => {
+        const locked = n > 1 && !stepDone(n - 1);
+        return `<button class="steptab ${ST.step === n ? "on" : ""} ${stepDone(n) ? "done" : ""}" ${locked ? "disabled" : ""} aria-current="${ST.step === n ? "step" : "false"}" onclick="gotoStep(${n})"><span class="n">STEP ${n}${locked ? " 🔒" : ""}</span>${["英語を聞く×3", "日本語を聞く", "自分で話す"][n - 1]}</button>`;
+      }).join("")}
     </div>
 
     <div id="stepBody"></div>`;
@@ -669,7 +724,11 @@ function stepDone(n) {
   if (n === 2) return ST.jaDone;
   return !!ST.result;
 }
-function gotoStep(n) { stopSpeak(); stopRec(); ST.step = n; renderStep(); }
+function gotoStep(n) {
+  stopSpeak(); stopRec();
+  if (n > 1 && !stepDone(n - 1)) { toast("前の STEP を完了してください"); return; }
+  ST.step = n; renderStudy();
+}
 
 function renderStep() {
   const p = ST.phrase, b = $("stepBody");
@@ -677,11 +736,11 @@ function renderStep() {
     b.innerHTML = `
       <div class="card">
         <div class="note" style="margin-bottom:9px">同じ英文を3つの音声で聞きます。すべて聞くと STEP 2 に進めます。</div>
-        <div class="en-lg" id="enText">${hlPhrase(p)}</div>
+        <div class="en-lg" id="enText" lang="en">${hlPhrase(p)}</div>
         <hr class="divider">
         ${VOICE_PROFILES.map((v, i) => `
           <div class="voicecard ${ST.v[i] ? "done" : ""}" id="vc${i}">
-            <button class="vplay" onclick="playVoice(${i})">${ST.v[i] ? "↻" : "▶"}</button>
+            <button class="vplay" onclick="playVoice(${i})" aria-label="${esc(v.name)}で再生">${ST.v[i] ? "↻" : "▶"}</button>
             <div class="vmeta"><div class="vname">${esc(v.name)}</div><div class="vdesc">${esc(v.desc)}</div></div>
             <span class="vcheck">${ST.v[i] ? "✓" : ""}</span>
           </div>`).join("")}
@@ -696,7 +755,7 @@ function renderStep() {
     b.innerHTML = `
       <div class="card">
         <div class="note" style="margin-bottom:9px">英文の意味を日本語音声で確認します。</div>
-        <div class="en-md">${hlPhrase(p)}</div>
+        <div class="en-md" lang="en">${hlPhrase(p)}</div>
         <div class="ja-sub" style="font-size:1rem;margin-top:10px">${esc(p.ja)}</div>
         <div class="btnrow">
           <button class="btn pri" onclick="playJa()">🔊 日本語を聞く</button>
@@ -716,15 +775,21 @@ function renderStep() {
         <div style="font-size:1.08rem;font-weight:700;margin:10px 0 4px">「${esc(p.ja)}」</div>
         ${ST.peek ? `<div class="en-md" style="margin-top:8px">${hlPhrase(p)}</div>` : ""}
         <div class="micwrap">
-          <button class="micbtn" id="micBtn" onclick="startSpeak()">🎙</button>
-          <div class="note" id="micHint">${SR ? "タップして英語で話してください" : "この端末は音声認識に対応していません"}</div>
+          <button class="micbtn" id="micBtn" onclick="startSpeak()" aria-label="録音して発話を採点する">🎙</button>
+          <div class="note" id="micHint">${SR ? "タップして英語で話してください" : "この端末は音声認識に対応していません。文字入力で採点します。"}</div>
         </div>
         <div class="btnrow" style="justify-content:center">
           <button class="btn sm ghost" onclick="ST.peek=!ST.peek;renderStep()">${ST.peek ? "英文を隠す" : "英文を見る"}</button>
-          <button class="btn sm ghost" onclick="playVoice(0)">🔊 お手本</button>
-          ${SR ? "" : `<button class="btn sm ghost" onclick="manualInput()">⌨ 文字で入力</button>`}
+          <button class="btn sm ghost" onclick="playVoice(0)" aria-label="お手本の音声を再生">🔊 お手本</button>
+          <button class="btn sm ghost" onclick="manualInput()">⌨ 文字で入力</button>
         </div>
-        <div id="scoreArea">${r ? scoreHtml(r) : ""}</div>
+        ${ST.typing || !SR ? `
+        <div style="margin-top:10px">
+          <label class="fld"><span>英語で入力して採点</span>
+            <textarea id="typeAns" rows="2" lang="en" placeholder="Type your English here..."></textarea></label>
+          <div class="btnrow tight"><button class="btn acc" onclick="submitTyped()">この内容で採点する</button></div>
+        </div>` : ""}
+        <div id="scoreArea" aria-live="polite">${r ? scoreHtml(r) : ""}</div>
       </div>`;
   }
 }
@@ -748,7 +813,8 @@ function playVoice(i) {
     onEnd: () => {
       spans.forEach(s => s.classList.remove("w-now"));
       if (card) card.classList.remove("playing");
-      if (!ST.v[i]) { ST.v[i] = true; pushSkill("listening", 72 + i * 6); save(); renderStep(); }
+      if (!ST.v[i]) { ST.v[i] = true; pushSkill("listening", 72 + i * 6); save(); }
+      renderStudy();   // 単語分割を元に戻し、重要表現ハイライトを復元する
     }
   });
 }
@@ -758,14 +824,13 @@ function playAll3() {
     text: p.en, voice: voiceFor(prof), rate: prof.rate,
     onStart: () => { document.querySelectorAll(".voicecard").forEach(c => c.classList.remove("playing")); const c = $("vc" + i); if (c) c.classList.add("playing"); },
     onEnd: () => { ST.v[i] = true; }
-  })), () => { pushSkill("listening", 80); save(); renderStep(); });
+  })), () => { pushSkill("listening", 80); save(); renderStudy(); });
 }
 function playJa() {
   speakOne(ST.phrase.ja, {
     voice: jaVoice(), rate: 1, lang: "ja-JP",
-    onEnd: () => { if (!ST.jaDone) { ST.jaDone = true; save(); renderStep(); } }
+    onEnd: () => { if (!ST.jaDone) { ST.jaDone = true; save(); renderStudy(); } }
   });
-  if (!jaVoice()) { ST.jaDone = true; setTimeout(renderStep, 300); }
 }
 function markListenHard() {
   const id = ST.phrase.id;
@@ -776,8 +841,14 @@ function markListenHard() {
 
 /* ---- STEP3 発話 ---- */
 function manualInput() {
-  const t = prompt("英語で入力してください");
-  if (t && t.trim()) gradeSpeech(t.trim(), null, null, Math.max(1.5, words(t).length / 2.2));
+  ST.typing = true; renderStep();
+  setTimeout(() => { const el = $("typeAns"); if (el) el.focus(); }, 60);
+}
+function submitTyped() {
+  const el = $("typeAns"); if (!el) return;
+  const t = (el.value || "").trim();
+  if (!t) { toast("英語で入力してください"); return; }
+  gradeSpeech(t, null, null, Math.max(1.5, words(t).length / 2.2));
 }
 function startSpeak() {
   if (!SR) { manualInput(); return; }
@@ -798,7 +869,7 @@ function startSpeak() {
 }
 async function gradeSpeech(txt, conf, blob, sec) {
   const p = ST.phrase;
-  const r = evaluate(p.en, txt, p.keys, sec, conf);
+  const r = evaluate(p.en, txt, p.keys, sec, conf, p.alts);
   r.hyp = txt;
   ST.result = r;
 
@@ -847,8 +918,10 @@ function scoreHtml(r) {
     </div>
     <div class="srow"><b>単語チェック</b>${r.rw.map((w, i) => `<span class="diffw ${r.hits[i] ? "hit" : "miss"}">${esc(w)}</span>`).join(" ")}</div>
     <div class="srow"><b>${esc(r.advice.label)}</b>
-      <div class="en-md" style="margin-top:4px">${esc(r.advice.text)}</div>
-      <button class="btn sm" style="margin-top:6px" onclick="playVoice(0)">🔊 お手本を聞く</button>
+      <div class="en-md" style="margin-top:4px" lang="en">${esc(r.advice.text)}</div>
+      <button class="btn sm" style="margin-top:6px" data-t="${esc(r.advice.text)}" data-v="0" data-rate="0.9" onclick="sayBtn(this)" aria-label="改善英文を再生">🔊 この言い方を聞く</button>
+      ${r.advice.also ? `<div class="note" style="margin-top:7px">もう一つの言い方：<span lang="en">${esc(r.advice.also)}</span>
+        <button class="btn sm ghost" data-t="${esc(r.advice.also)}" data-v="1" onclick="sayBtn(this)" aria-label="別の言い方を再生">🔊</button></div>` : ""}
     </div>
     ${(ST.phrase.alts || []).length ? `<div class="srow"><b>別の言い方</b>${ST.phrase.alts.map(a => `<div style="margin-top:3px">・${esc(a)} <button class="btn sm ghost" data-t="${esc(a)}" data-v="1" onclick="sayBtn(this)">🔊</button></div>`).join("")}</div>` : ""}
     ${ST.recKey ? `<div class="srow"><b>自分の録音</b><button class="btn sm" onclick="playRec('${ST.recKey}')">▶ 聞き返す</button></div>` : ""}
@@ -936,8 +1009,16 @@ function startQuiz(kind) {
   let pool;
   const all = window.PHRASES || [];
   if (kind === "weak") {
-    const ids = weakList("phrases", 30).map(x => x[0]);
-    pool = ids.map(id => PH_BY_ID[id]).filter(Boolean);
+    // つまずき回数を重みにして、苦手なほど出やすくする
+    pool = [];
+    weakList("phrases", 30).forEach(([id, c]) => {
+      const ph = PH_BY_ID[id]; if (!ph) return;
+      for (let i = 0; i < Math.min(5, c); i++) pool.push(ph);
+    });
+    weakList("listen", 15).forEach(([id, c]) => {   // 聞き取れなかった文も出題
+      const ph = PH_BY_ID[id]; if (!ph) return;
+      for (let i = 0; i < Math.min(3, c); i++) pool.push(ph);
+    });
     if (!pool.length) { toast("苦手の記録がまだありません。ランダムで出題します"); pool = all; }
   } else if (kind === "saved") {
     pool = P.saved.map(id => PH_BY_ID[id]).filter(Boolean);
@@ -1046,9 +1127,9 @@ function renderPhrases() {
             <span class="chip cat">${catIcon(p.cat)} ${esc(catName(p.cat))}</span>
             <span class="chip ${lvClass(p.level)}">${esc(p.level)}</span>
             ${phraseDone(p.id) ? '<span class="chip ok">✓</span>' : ""}
-            <button class="chip" style="cursor:pointer;margin-left:auto" onclick="toggleSave('${p.id}')">${P.saved.includes(p.id) ? "★" : "☆"}</button>
+            <button class="chip" style="cursor:pointer;margin-left:auto" onclick="toggleSave('${p.id}')" aria-pressed="${P.saved.includes(p.id)}" aria-label="フレーズ集に保存">${P.saved.includes(p.id) ? "★" : "☆"}</button>
           </div>
-          <div class="en-md">${hlPhrase(p)}</div>
+          <div class="en-md" lang="en">${hlPhrase(p)}</div>
           <div class="ja-sub">${esc(p.ja)}</div>
           <div class="btnrow tight">
             <button class="btn sm pri" data-t="${esc(p.en)}" data-v="0" data-rate=".85" onclick="sayBtn(this)">🔊 ゆっくり</button>
@@ -1104,7 +1185,7 @@ function renderProgress() {
   const cats = window.CATEGORIES || [];
   // 直近14日
   const days = [];
-  for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const k = d.toISOString().slice(0, 10); days.push({ k, s: P.sessions[k] || { sec: 0 } }); }
+  for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const k = dateKey(d); days.push({ k, s: P.sessions[k] || { sec: 0 } }); }
   const maxSec = Math.max(600, ...days.map(d => d.s.sec));
 
   $("v-progress").innerHTML = `
@@ -1147,10 +1228,12 @@ function renderProgress() {
     <div class="btnrow"><button class="btn ng" onclick="resetStats()">学習履歴をリセット</button></div>`;
 }
 function resetStats() {
-  if (!confirm("学習履歴・苦手記録・録音をすべて削除します。よろしいですか？")) return;
+  if (!confirm("学習履歴・苦手記録・録音を削除します。\n（★保存した表現とロールプレイの会話ログは残ります）\nよろしいですか？")) return;
   P.recordings.forEach(r => recDel(r.id));
-  const keep = P.settings;
-  P = blankProfileData(); P.settings = keep; save(); renderProgress(); toast("リセットしました");
+  const keepSettings = P.settings, keepSaved = P.saved, keepLogs = P.logs;
+  P = blankProfileData();
+  P.settings = keepSettings; P.saved = keepSaved; P.logs = keepLogs;
+  save(); renderProgress(); toast("学習履歴をリセットしました");
 }
 
 /* =========================================================
@@ -1160,7 +1243,7 @@ let RP = null;
 function renderRoleplayMenu() {
   const RL = window.ROLEPLAYS || {};
   $("v-roleplay").innerHTML = `
-    <div class="banner info">会議シナリオを通しで англий…英語だけで対話する練習です。ヒントと模範解答が各ターンに付きます。</div>
+    <div class="banner info">会議の流れを英語だけで通す練習です。各ターンに日本語のヒントと模範解答が付きます。</div>
     ${Object.entries(RL).map(([k, v]) => `
       <button class="tile" onclick="startRoleplay('${k}')">
         <span class="ic">${v.icon || "🤝"}</span>
@@ -1228,12 +1311,25 @@ function rpMic() {
   listenOnce((txt) => { $("rpAns").value = txt; b.disabled = false; b.textContent = "🎙 音声で応答"; },
     () => { const bb = $("rpMic"); if (bb) { bb.disabled = false; bb.textContent = "🎙 音声で応答"; } });
 }
-function rpShowSample() { toast(RP.turns[RP.i].sample); }
+function rpShowSample() {
+  const t = RP.turns[RP.i];
+  openSheet('<h3>模範例</h3>'
+    + '<div class="srow"><b>英語</b><div class="en-md" lang="en">' + esc(t.sample) + '</div></div>'
+    + (t.hint ? '<div class="srow"><b>ねらい</b>' + esc(t.hint) + '</div>' : "")
+    + '<div class="btnrow">'
+    + '<button class="btn pri" data-t="' + esc(t.sample) + '" data-v="1" onclick="sayBtn(this)" aria-label="模範例を再生">🔊 聞く</button>'
+    + '<button class="btn" onclick="rpCopySample()">入力欄に写す</button>'
+    + '<button class="btn ghost" onclick="closeSheet()">閉じる</button></div>');
+}
+function rpCopySample() {
+  const el = $("rpAns"); if (el) el.value = RP.turns[RP.i].sample;
+  closeSheet();
+}
 function rpReply() {
   const ans = ($("rpAns").value || "").trim();
   if (!ans) { toast("英語で応答を入力してください"); return; }
   const t = RP.turns[RP.i];
-  const r = evaluate(t.sample, ans, null, Math.max(1.5, words(ans).length / 2.2), null);
+  const r = evaluate(t.sample, ans, null, Math.max(1.5, words(ans).length / 2.2), null, null);
   RP.log.items.push({ ai: RP.kind === "script" ? t.ai : t.ja, me: ans, sample: t.sample, score: r.total });
   const t2 = sessToday(); t2.utter++; t2.total++; if (r.total >= 70) t2.correct++;
   pushSkill("speaking", r.accuracy); pushSkill("fluency", r.fluency); save();
@@ -1339,6 +1435,9 @@ function stopAuto() { }
    ========================================================= */
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { stopRec(); stopSpeak(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("sheet").classList.contains("open")) closeSheet();
 });
 window.addEventListener("pagehide", () => { stopRec(); stopSpeak(); });
 

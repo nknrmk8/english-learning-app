@@ -149,12 +149,75 @@ const ROLEPLAYS = {
  ]},
 };
 
+
+/* ---------- 初級シナリオ（既存の初級フレーズで構成） ---------- */
+const SCENARIOS_BEGINNER = [
+  {
+    id: "sc_bg_progress", title: "朝会で進捗を確認する（入門）", cat: "progress", level: "初級",
+    desc: "短い質問と報告だけで進捗確認を成立させる、いちばん基本の会議。まずここから。",
+    steps: [
+      { phrase: "a019", note: "担当機能の進捗を尋ねる" },
+      { phrase: "a020", note: "進捗率を数字で答える" },
+      { phrase: "a083", note: "遅れがないか確認する" },
+      { phrase: "a033", note: "予定どおりだと答える" },
+      { phrase: "a021", note: "実績と目標を並べて報告する" },
+      { phrase: "a026", note: "後ろ倒しの可能性を伝える" },
+      { phrase: "a032", note: "決まり次第調整すると約束する" },
+      { phrase: "a006", note: "その場で答えられない件を持ち帰る" },
+      { phrase: "a001", note: "スケジュールの共有を依頼して締める" }
+    ]
+  },
+  {
+    id: "sc_bg_vendor", title: "委託先に依頼と確認をする（入門）", cat: "vendor", level: "初級",
+    desc: "担当者・報告・体制・工数を短い文で確認する、発注側の基本パターン。",
+    steps: [
+      { phrase: "a010", note: "先方の担当者を確認する" },
+      { phrase: "a008", note: "週次報告の提出を依頼する" },
+      { phrase: "a011", note: "コーディング規約の順守を依頼する" },
+      { phrase: "a049", note: "アサイン人数を確認する" },
+      { phrase: "a044", note: "増員の予定を共有する" },
+      { phrase: "a047", note: "必要工数を人月で伝える" },
+      { phrase: "a004", note: "見積の提出期限を約束する" },
+      { phrase: "a001", note: "スケジュール共有を依頼して締める" }
+    ]
+  },
+  {
+    id: "sc_bg_budget", title: "予算とライセンスの基本を確認する（入門）", cat: "budget", level: "初級",
+    desc: "年度予算の残りとライセンス費用の課金先を確認する、お金まわりの入口。",
+    steps: [
+      { phrase: "a064", note: "今年度の予算額を確認する" },
+      { phrase: "a065", note: "残額の割合を答える" },
+      { phrase: "a055", note: "予算超過を率直に共有する" },
+      { phrase: "a058", note: "折半を提案する" },
+      { phrase: "a072", note: "ライセンス費用の課金先を確認する" },
+      { phrase: "a074", note: "必要なライセンス数を確認する" },
+      { phrase: "a077", note: "年間費用の概算を伝える" },
+      { phrase: "a090", note: "拠点からの承認状況を確認して締める" }
+    ]
+  },
+  {
+    id: "sc_bg_quality", title: "テストとリリースを確認する（入門）", cat: "quality", level: "初級",
+    desc: "テスト状況から不具合、担当決め、リリース可否までを短い文でたどる。",
+    steps: [
+      { phrase: "b004", note: "消化したテストケース数を確認する" },
+      { phrase: "b002", note: "欠陥率が基準内だと報告する" },
+      { phrase: "b001", note: "重大な不具合の検出を共有する" },
+      { phrase: "b053", note: "原因が調査中だと伝える" },
+      { phrase: "b055", note: "課題の担当者を決める" },
+      { phrase: "b003", note: "受入テストの開始予定を伝える" },
+      { phrase: "b043", note: "リリース準備が整ったか確認する" },
+      { phrase: "b040", note: "リリース日を確定して締める" }
+    ]
+  }
+];
+
 /* ---------- 統合 ---------- */
 (function () {
   const A = window.PHRASES_A || [], B = window.PHRASES_B || [];
   const SA = window.SCENARIOS_A || [], SB = window.SCENARIOS_B || [];
+  const SG = typeof SCENARIOS_BEGINNER !== "undefined" ? SCENARIOS_BEGINNER : [];
   window.PHRASES = A.concat(B);
-  window.SCENARIOS = SA.concat(SB);
+  window.SCENARIOS = SG.concat(SA, SB);   // 初級を先頭に（入口を分かりやすく）
   window.CATEGORIES = CATEGORIES;
   window.TIER_WORDS = TIER_WORDS;
   window.GLOSSARY = GLOSSARY;

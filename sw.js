@@ -3,7 +3,9 @@ const ASSETS = ["./", "./index.html", "./app.css", "./app.js", "./data.js", "./d
                 "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE)
+    .then(c => Promise.allSettled(ASSETS.map(a => c.add(a))))   // 1つ失敗しても残りはキャッシュする
+    .then(() => self.skipWaiting()).catch(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(
