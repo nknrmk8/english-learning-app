@@ -681,7 +681,7 @@ function studyOne(phraseId) {
   startStudy({ id: "_single", title: "ピンポイント練習", steps: [{ phrase: phraseId, note: "" }], cat: p.cat, level: p.level }, 0);
 }
 function startStudy(sc, idx) {
-  ST = { sc, idx, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null };
+  ST = { sc, idx, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null, hideEn: false };
   go("study");
 }
 function renderStudy() {
@@ -692,31 +692,117 @@ function renderStudy() {
   ST.phrase = p;
   const saved = P.saved.includes(p.id);
   const rec = P.study[p.id] || {};
+  const total = ST.sc.steps.length;
   $("barTitle").textContent = ST.sc.title;
 
   $("v-study").innerHTML = `
     <button class="back" onclick="go('scenarios')">← シナリオ一覧</button>
+
     <div class="card pad-s" style="margin-bottom:11px">
       <div class="chips">
         <span class="chip cat">${catIcon(p.cat)} ${esc(catName(p.cat))}</span>
         <span class="chip ${lvClass(p.level)}">${esc(p.level)}</span>
-        <span class="chip">${ST.idx + 1} / ${ST.sc.steps.length}</span>
+        <span class="chip">${ST.idx + 1} / ${total}</span>
         ${rec.done ? '<span class="chip ok">✓ 習得済み</span>' : ""}
         <button class="chip" style="cursor:pointer;margin-left:auto" onclick="toggleSave('${p.id}')" aria-pressed="${saved}">${saved ? "★ 保存済み" : "☆ 保存"}</button>
       </div>
       ${stp.note ? `<div class="note" style="margin-top:7px">🎯 この発言のねらい：${esc(stp.note)}</div>` : ""}
-      <div class="bar" style="margin-top:9px"><i style="width:${Math.round(100 * ST.sc.steps.filter(x => phraseDone(x.phrase)).length / ST.sc.steps.length)}%"></i></div>
+      <div class="bar" style="margin-top:9px"><i style="width:${Math.round(100 * ST.sc.steps.filter(x => phraseDone(x.phrase)).length / total)}%"></i></div>
     </div>
 
-    <div class="steps">
-      ${[1, 2, 3].map(n => {
-        const locked = n > 1 && !stepDone(n - 1);
-        return `<button class="steptab ${ST.step === n ? "on" : ""} ${stepDone(n) ? "done" : ""}" ${locked ? "disabled" : ""} aria-current="${ST.step === n ? "step" : "false"}" onclick="gotoStep(${n})"><span class="n">STEP ${n}${locked ? " 🔒" : ""}</span>${["英語を聞く×3", "日本語を聞く", "自分で話す"][n - 1]}</button>`;
-      }).join("")}
+    <!-- ① 英語を聞く -->
+    <div class="card">
+      <div class="card-head">
+        <span class="stepno">1</span><span class="t">英語を聞く</span>
+        <span class="chip" id="chk1" style="margin-left:auto"></span>
+      </div>
+      <div class="en-lg ${ST.hideEn ? "masked" : ""}" id="enText" lang="en">${hlPhrase(p)}</div>
+      ${ST.hideEn ? `<div class="note" style="margin-top:4px">英文を隠しています（STEP 3 の練習用）</div>` : ""}
+      <div style="margin-top:11px">
+        ${VOICE_PROFILES.map((v, i) => `
+          <div class="voicecard ${ST.v[i] ? "done" : ""}" id="vc${i}">
+            <button class="vplay" onclick="playVoice(${i})" aria-label="${esc(v.name)}で再生">${ST.v[i] ? "↻" : "▶"}</button>
+            <div class="vmeta"><div class="vname">${esc(v.name)}</div><div class="vdesc">${esc(v.desc)}</div></div>
+            <span class="vcheck">${ST.v[i] ? "✓" : ""}</span>
+          </div>`).join("")}
+      </div>
+      <div class="btnrow">
+        <button class="btn pri" onclick="playAll3()">▶ 3音声を通して再生</button>
+        <button class="btn ghost" onclick="toggleHideEn()">${ST.hideEn ? "👁 英文を表示" : "🙈 英文を隠す"}</button>
+        <button class="btn ghost" onclick="markListenHard()">🤔 聞き取れなかった</button>
+      </div>
+      ${!ttsAvailable() ? '<div class="banner warn" style="margin-top:10px">この端末は音声合成に対応していません。英文を目で追って進めてください。</div>' : ""}
     </div>
 
-    <div id="stepBody"></div>`;
-  renderStep();
+    <!-- ② 日本語で意味を確認 -->
+    <div class="card">
+      <div class="card-head">
+        <span class="stepno">2</span><span class="t">日本語で意味を確認</span>
+        <span class="chip" id="chk2" style="margin-left:auto"></span>
+      </div>
+      <div style="font-size:1.04rem;font-weight:650;line-height:1.6">${esc(p.ja)}</div>
+      <div class="btnrow">
+        <button class="btn pri" onclick="playJa()">🔊 日本語を聞く</button>
+      </div>
+      ${(p.keys || []).length ? `<hr class="divider"><div class="srow"><b>重要表現</b>
+        ${p.keys.map((k, i) => `<div style="margin-top:5px"><span class="kw key" data-p="${esc(p.id)}" data-i="${i}" onclick="keySheet(this.dataset.p,+this.dataset.i)">${esc(k.w)}</span> — ${esc(k.mean)}</div>`).join("")}</div>` : ""}
+      ${p.situation ? `<div class="srow"><b>使用場面</b>${esc(p.situation)}</div>` : ""}
+    </div>
+
+    <!-- ③ 自分で話す -->
+    <div class="card">
+      <div class="card-head">
+        <span class="stepno">3</span><span class="t">自分で話す</span>
+        <span class="chip" id="chk3" style="margin-left:auto"></span>
+      </div>
+      <div id="speakBody"></div>
+    </div>
+
+    <div class="btnrow" style="margin-bottom:6px">
+      ${ST.idx > 0 ? `<button class="btn ghost" onclick="prevPhrase()">← 前のフレーズ</button>` : ""}
+      ${ST.idx < total - 1
+        ? `<button class="btn acc" style="margin-left:auto" onclick="nextPhrase()">次のフレーズ →</button>`
+        : `<button class="btn ok" style="margin-left:auto" onclick="finishScenario()">シナリオを完了する 🎉</button>`}
+    </div>`;
+  renderSpeakSection();
+  updateChecks();
+}
+
+/* ③ 自分で話す — ここだけ部分更新する（他の操作で入力や採点結果が消えないように） */
+function renderSpeakSection() {
+  const b = $("speakBody"); if (!b || !ST) return;
+  const p = ST.phrase, r = ST.result;
+  b.innerHTML = `
+    <div class="note">次の日本語を英語で言ってみましょう。${SR ? "" : "（この端末は音声認識に非対応のため、文字入力で採点します）"}</div>
+    <div style="font-size:1.04rem;font-weight:700;margin:9px 0 2px">「${esc(p.ja)}」</div>
+    <div class="micwrap">
+      <button class="micbtn" id="micBtn" onclick="startSpeak()" aria-label="録音して発話を採点する">🎙</button>
+      <div class="note" id="micHint">${SR ? "タップして英語で話してください" : "下の入力欄に英語を入力してください"}</div>
+    </div>
+    <div class="btnrow" style="justify-content:center">
+      <button class="btn sm ghost" onclick="toggleHideEn()">${ST.hideEn ? "👁 英文を表示" : "🙈 英文を隠して挑戦"}</button>
+      <button class="btn sm ghost" onclick="playVoice(0)" aria-label="お手本の音声を再生">🔊 お手本</button>
+      ${ST.typing || !SR ? "" : `<button class="btn sm ghost" onclick="manualInput()">⌨ 文字で入力</button>`}
+    </div>
+    ${ST.typing || !SR ? `
+      <div style="margin-top:10px">
+        <label class="fld"><span>英語で入力して採点</span>
+          <textarea id="typeAns" rows="2" lang="en" placeholder="Type your English here..."></textarea></label>
+        <div class="btnrow tight"><button class="btn acc" onclick="submitTyped()">この内容で採点する</button></div>
+      </div>` : ""}
+    <div id="scoreArea" aria-live="polite">${r ? scoreHtml(r) : ""}</div>`;
+}
+
+/* 3セクションの完了マークを更新 */
+function updateChecks() {
+  if (!ST) return;
+  const labels = { 1: ST.v.filter(Boolean).length + " / 3 再生", 2: "未再生", 3: "未挑戦" };
+  [1, 2, 3].forEach(n => {
+    const el = $("chk" + n); if (!el) return;
+    const done = stepDone(n);
+    el.className = "chip" + (done ? " ok" : "");
+    el.textContent = done ? (n === 1 ? "✓ 3音声すべて" : n === 2 ? "✓ 再生済み" : "✓ " + ST.result.total + "点") : labels[n];
+  });
 }
 function stepDone(n) {
   if (!ST) return false;
@@ -724,84 +810,21 @@ function stepDone(n) {
   if (n === 2) return ST.jaDone;
   return !!ST.result;
 }
-function gotoStep(n) {
-  stopSpeak(); stopRec();
-  if (n > 1 && !stepDone(n - 1)) { toast("前の STEP を完了してください"); return; }
-  ST.step = n; renderStudy();
+function toggleHideEn() {
+  ST.hideEn = !ST.hideEn;
+  const el = $("enText");
+  if (el) el.classList.toggle("masked", !!ST.hideEn);
+  renderStudy();
+  if (ST.hideEn) { const sb = $("speakBody"); if (sb) sb.scrollIntoView({ behavior: "smooth", block: "center" }); }
 }
-
-function renderStep() {
-  const p = ST.phrase, b = $("stepBody");
-  if (ST.step === 1) {
-    b.innerHTML = `
-      <div class="card">
-        <div class="note" style="margin-bottom:9px">同じ英文を3つの音声で聞きます。すべて聞くと STEP 2 に進めます。</div>
-        <div class="en-lg" id="enText" lang="en">${hlPhrase(p)}</div>
-        <hr class="divider">
-        ${VOICE_PROFILES.map((v, i) => `
-          <div class="voicecard ${ST.v[i] ? "done" : ""}" id="vc${i}">
-            <button class="vplay" onclick="playVoice(${i})" aria-label="${esc(v.name)}で再生">${ST.v[i] ? "↻" : "▶"}</button>
-            <div class="vmeta"><div class="vname">${esc(v.name)}</div><div class="vdesc">${esc(v.desc)}</div></div>
-            <span class="vcheck">${ST.v[i] ? "✓" : ""}</span>
-          </div>`).join("")}
-        <div class="btnrow">
-          <button class="btn pri" onclick="playAll3()">▶ 3音声を通して再生</button>
-          <button class="btn ghost" onclick="markListenHard()">🤔 聞き取れなかった</button>
-        </div>
-        ${!ttsAvailable() ? '<div class="banner warn" style="margin-top:10px">この端末は音声合成に対応していません。英文を目で追って進めてください。</div>' : ""}
-        <div class="btnrow"><button class="btn acc block" ${ST.v.every(Boolean) ? "" : "disabled"} onclick="gotoStep(2)">STEP 2 へ進む →</button></div>
-      </div>`;
-  } else if (ST.step === 2) {
-    b.innerHTML = `
-      <div class="card">
-        <div class="note" style="margin-bottom:9px">英文の意味を日本語音声で確認します。</div>
-        <div class="en-md" lang="en">${hlPhrase(p)}</div>
-        <div class="ja-sub" style="font-size:1rem;margin-top:10px">${esc(p.ja)}</div>
-        <div class="btnrow">
-          <button class="btn pri" onclick="playJa()">🔊 日本語を聞く</button>
-          <button class="btn ghost" onclick="gotoStep(1)">← 英語をもう一度</button>
-        </div>
-        <hr class="divider">
-        ${(p.keys || []).length ? `<div class="srow"><b>重要表現</b>
-          ${p.keys.map((k, i) => `<div style="margin-top:5px"><span class="kw key" data-p="${esc(p.id)}" data-i="${i}" onclick="keySheet(this.dataset.p,+this.dataset.i)">${esc(k.w)}</span> — ${esc(k.mean)}</div>`).join("")}</div>` : ""}
-        ${p.situation ? `<div class="srow"><b>使用場面</b>${esc(p.situation)}</div>` : ""}
-        <div class="btnrow"><button class="btn acc block" ${ST.jaDone ? "" : "disabled"} onclick="gotoStep(3)">STEP 3 へ進む →</button></div>
-      </div>`;
-  } else {
-    const r = ST.result;
-    b.innerHTML = `
-      <div class="card">
-        <div class="note">次の日本語を英語で言ってみましょう。${S3Hint()}</div>
-        <div style="font-size:1.08rem;font-weight:700;margin:10px 0 4px">「${esc(p.ja)}」</div>
-        ${ST.peek ? `<div class="en-md" style="margin-top:8px">${hlPhrase(p)}</div>` : ""}
-        <div class="micwrap">
-          <button class="micbtn" id="micBtn" onclick="startSpeak()" aria-label="録音して発話を採点する">🎙</button>
-          <div class="note" id="micHint">${SR ? "タップして英語で話してください" : "この端末は音声認識に対応していません。文字入力で採点します。"}</div>
-        </div>
-        <div class="btnrow" style="justify-content:center">
-          <button class="btn sm ghost" onclick="ST.peek=!ST.peek;renderStep()">${ST.peek ? "英文を隠す" : "英文を見る"}</button>
-          <button class="btn sm ghost" onclick="playVoice(0)" aria-label="お手本の音声を再生">🔊 お手本</button>
-          <button class="btn sm ghost" onclick="manualInput()">⌨ 文字で入力</button>
-        </div>
-        ${ST.typing || !SR ? `
-        <div style="margin-top:10px">
-          <label class="fld"><span>英語で入力して採点</span>
-            <textarea id="typeAns" rows="2" lang="en" placeholder="Type your English here..."></textarea></label>
-          <div class="btnrow tight"><button class="btn acc" onclick="submitTyped()">この内容で採点する</button></div>
-        </div>` : ""}
-        <div id="scoreArea" aria-live="polite">${r ? scoreHtml(r) : ""}</div>
-      </div>`;
-  }
-}
-function S3Hint() { return SR ? "" : "（音声認識に非対応の端末では、文字入力で採点できます）"; }
 
 function playVoice(i) {
   const prof = VOICE_PROFILES[i], p = ST.phrase;
   const el = $("enText");
   let spans = [];
-  if (el) {
+  if (el && !ST.hideEn) {
     const toks = p.en.split(/(\s+)/); let pos = 0;
-    el.innerHTML = toks.map(t => { const s = pos; pos += t.length; return /^\s+$/.test(t) || !t ? t : `<span class="pw" data-s="${s}">${hlPhrase({ en: t, keys: [], id: p.id })}</span>`; }).join("");
+    el.innerHTML = toks.map(t => { const s = pos; pos += t.length; return /^\s+$/.test(t) || !t ? t : `<span class="pw" data-s="${s}">${esc(t)}</span>`; }).join("");
     spans = [...el.querySelectorAll(".pw")];
   }
   const card = $("vc" + i);
@@ -809,27 +832,33 @@ function playVoice(i) {
   if (card) card.classList.add("playing");
   speakOne(p.en, {
     voice: voiceFor(prof), rate: prof.rate,
-    onBoundary: e => { spans.forEach(s => s.classList.remove("w-now")); let t = null; for (const s of spans) if (+s.dataset.s <= e.charIndex) t = s; if (t) t.classList.add("w-now"); },
-    onEnd: () => {
-      spans.forEach(s => s.classList.remove("w-now"));
-      if (card) card.classList.remove("playing");
-      if (!ST.v[i]) { ST.v[i] = true; pushSkill("listening", 72 + i * 6); save(); }
-      renderStudy();   // 単語分割を元に戻し、重要表現ハイライトを復元する
-    }
+    onBoundary: e => { spans.forEach(x => x.classList.remove("w-now")); let t = null; for (const x of spans) if (+x.dataset.s <= e.charIndex) t = x; if (t) t.classList.add("w-now"); },
+    onEnd: () => { finishVoice(i, card, el); }
   });
 }
+/* 再生終了時は画面全体ではなく該当箇所だけ更新する */
+function finishVoice(i, card, el) {
+  if (el && !ST.hideEn) el.innerHTML = hlPhrase(ST.phrase);   // 単語分割を戻して重要表現ハイライトを復元
+  if (card) {
+    card.classList.remove("playing"); card.classList.add("done");
+    const b = card.querySelector(".vplay"); if (b) b.textContent = "↻";
+    const c = card.querySelector(".vcheck"); if (c) c.textContent = "✓";
+  }
+  if (!ST.v[i]) { ST.v[i] = true; pushSkill("listening", 72 + i * 6); save(); }
+  updateChecks();
+}
 function playAll3() {
-  const p = ST.phrase;
+  const p = ST.phrase, el = $("enText");
   speakSeq(VOICE_PROFILES.map((prof, i) => ({
     text: p.en, voice: voiceFor(prof), rate: prof.rate,
     onStart: () => { document.querySelectorAll(".voicecard").forEach(c => c.classList.remove("playing")); const c = $("vc" + i); if (c) c.classList.add("playing"); },
-    onEnd: () => { ST.v[i] = true; }
-  })), () => { pushSkill("listening", 80); save(); renderStudy(); });
+    onEnd: () => { finishVoice(i, $("vc" + i), el); }
+  })), () => { pushSkill("listening", 80); save(); updateChecks(); });
 }
 function playJa() {
   speakOne(ST.phrase.ja, {
     voice: jaVoice(), rate: 1, lang: "ja-JP",
-    onEnd: () => { if (!ST.jaDone) { ST.jaDone = true; save(); renderStudy(); } }
+    onEnd: () => { if (!ST.jaDone) { ST.jaDone = true; save(); } updateChecks(); }
   });
 }
 function markListenHard() {
@@ -841,7 +870,7 @@ function markListenHard() {
 
 /* ---- STEP3 発話 ---- */
 function manualInput() {
-  ST.typing = true; renderStep();
+  ST.typing = true; renderSpeakSection();
   setTimeout(() => { const el = $("typeAns"); if (el) el.focus(); }, 60);
 }
 function submitTyped() {
@@ -897,6 +926,7 @@ async function gradeSpeech(txt, conf, blob, sec) {
   }
   save();
   $("scoreArea").innerHTML = scoreHtml(r);
+  updateChecks();
   $("scoreArea").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 function scoreHtml(r) {
@@ -927,7 +957,7 @@ function scoreHtml(r) {
     ${ST.recKey ? `<div class="srow"><b>自分の録音</b><button class="btn sm" onclick="playRec('${ST.recKey}')">▶ 聞き返す</button></div>` : ""}
     <div class="note" style="margin-top:9px">※採点は端末内の簡易アルゴリズム（単語一致・語順・話速・表現の丁寧さ）による参考値です。</div>
     <div class="btnrow">
-      <button class="btn" onclick="ST.result=null;renderStep()">↻ もう一度話す</button>
+      <button class="btn" onclick="ST.result=null;ST.recKey=null;renderSpeakSection();updateChecks()">↻ もう一度話す</button>
       ${last ? `<button class="btn ok" onclick="finishScenario()">シナリオを完了する 🎉</button>`
       : `<button class="btn acc" onclick="nextPhrase()">次のフレーズ →</button>`}
     </div>`;
@@ -949,8 +979,18 @@ async function playRec(key) {
   a.onended = () => URL.revokeObjectURL(url);
   a.play().catch(() => { toast("再生できませんでした"); URL.revokeObjectURL(url); });
 }
+function prevPhrase() {
+  if (!ST || ST.idx <= 0) return;
+  const keep = ST.hideEn;
+  ST = { sc: ST.sc, idx: ST.idx - 1, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null, hideEn: keep };
+  renderStudy(); window.scrollTo(0, 0);
+}
 function nextPhrase() {
-  if (ST.idx < ST.sc.steps.length - 1) { ST = { sc: ST.sc, idx: ST.idx + 1, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null }; renderStudy(); window.scrollTo(0, 0); }
+  if (ST.idx < ST.sc.steps.length - 1) {
+    const keep = ST.hideEn;
+    ST = { sc: ST.sc, idx: ST.idx + 1, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null, hideEn: keep };
+    renderStudy(); window.scrollTo(0, 0);
+  }
   else finishScenario();
 }
 function finishScenario() {

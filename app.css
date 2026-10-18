@@ -366,3 +366,14 @@ label.fld > span{display:block; font-size:.78rem; color:var(--text-sub); margin-
   .scoregrid{grid-template-columns:repeat(2,1fr)}
   .tabbar button{font-size:.58rem}
 }
+
+/* ===== 1画面STEP構成 ===== */
+.stepno{
+  flex:none; width:26px; height:26px; border-radius:var(--r-pill);
+  background:var(--brand); color:var(--brand-ink);
+  display:grid; place-items:center; font-weight:800; font-size:.82rem;
+}
+.en-lg.masked, .en-md.masked{
+  filter:blur(7px); user-select:none; opacity:.55; cursor:pointer;
+}
+.card-head .t{flex:none}
