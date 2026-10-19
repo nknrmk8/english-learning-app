@@ -377,3 +377,26 @@ label.fld > span{display:block; font-size:.78rem; color:var(--text-sub); margin-
   filter:blur(7px); user-select:none; opacity:.55; cursor:pointer;
 }
 .card-head .t{flex:none}
+
+/* ===== 通し再生のシーケンス行 ===== */
+.seq{display:flex; align-items:center; gap:11px; padding:11px 12px; border:1px solid var(--line);
+     border-radius:var(--r-md); background:var(--surface-2); margin-bottom:8px; position:relative; overflow:hidden}
+.seq .no{flex:none; width:24px; height:24px; border-radius:var(--r-pill); background:var(--line-strong);
+         color:var(--text); display:grid; place-items:center; font-size:.73rem; font-weight:800}
+.seq .play{flex:none; width:38px; height:38px; border-radius:var(--r-pill); border:none; cursor:pointer;
+           background:var(--brand); color:var(--brand-ink); font-size:.92rem; display:grid; place-items:center}
+.seq .play:active{transform:scale(.94)}
+.seq .meta{flex:1; min-width:0}
+.seq .nm{font-weight:700; font-size:.87rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.seq .ds{font-size:.71rem; color:var(--text-sub); margin-top:1px}
+.seq .tag{font-size:.63rem; padding:1px 7px; border-radius:var(--r-pill); font-weight:700}
+.seq .tag.en{background:var(--info-bg); color:var(--accent)}
+.seq .tag.ja{background:var(--warn-bg); color:var(--warn)}
+.seq .vcheck{flex:none; width:1.3em; text-align:center; color:var(--ok)}
+.seq.done{border-color:var(--ok)}
+.seq.done .no{background:var(--ok); color:#fff}
+.seq.now{border-color:var(--accent); background:var(--info-bg); box-shadow:0 0 0 2px rgba(47,111,228,.18)}
+.seq.now .no{background:var(--accent); color:#fff}
+.btn.block.lg{display:flex; width:100%}
+.micbtn.rec{background:var(--ng)}
+#liveText{word-break:break-word}

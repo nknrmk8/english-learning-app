@@ -144,20 +144,52 @@ function refreshVoices() {
 function guessGender(v) { if (FEMALE_RE.test(v.name)) return "female"; if (MALE_RE.test(v.name)) return "male"; return ""; }
 
 /* 仕様 4章: Voice1 女性/標準/明瞭, Voice2 男性/自然速度, Voice3 やや速め */
+/* 3つの「喋り方」。速度差ではなく発話スタイルで作り分ける */
 const VOICE_PROFILES = [
-  { key: "v1", no: 1, name: "Voice 1 — 女性・標準速度", desc: "ゆっくり明瞭。まず意味を掴む", want: "female", rate: 0.85 },
-  { key: "v2", no: 2, name: "Voice 2 — 男性・自然な会話速度", desc: "実際の会議に近いスピード", want: "male", rate: 1.0 },
-  { key: "v3", no: 3, name: "Voice 3 — やや速め・ネイティブ寄り", desc: "聞き取りの負荷を上げる仕上げ", want: "any", rate: 1.22 }
+  { key: "v1", name: "ネイティブ寄りの話し方", short: "ネイティブ寄り",
+    desc: "実際の会議で耳にするままの自然な流れ", mode: "normal", rate: 1.0 },
+  { key: "v2", name: "1語ずつはっきり", short: "1語ずつはっきり",
+    desc: "普通の速さのまま単語を区切って発音。1語ずつ聞き取る", mode: "word", rate: 1.0 },
+  { key: "v3", name: "普通の喋り言葉（別の声）", short: "普通の喋り言葉",
+    desc: "話者が変わり、人によるニュアンスの違いに慣れる", mode: "normal", rate: 1.04 }
 ];
-function voiceFor(prof) {
-  const set = P && P.settings[prof.key];
-  if (set) { const v = EN_VOICES.find(v => v.name === set); if (v) return v; }
-  if (prof.want === "female") return EN_VOICES.find(v => guessGender(v) === "female") || EN_VOICES[0] || null;
-  if (prof.want === "male") return EN_VOICES.find(v => guessGender(v) === "male") || EN_VOICES[1] || EN_VOICES[0] || null;
-  // v3: v1/v2 と別の声を優先
-  const used = [P && P.settings.v1, P && P.settings.v2].filter(Boolean);
-  return EN_VOICES.find(v => !used.includes(v.name) && v !== EN_VOICES[0]) || EN_VOICES[EN_VOICES.length - 1] || EN_VOICES[0] || null;
+/* 通し再生のセグメント（英 → 日 → 英 → 英） */
+const SEGMENTS = [
+  { tag: "EN", prof: 0 },
+  { tag: "JA", prof: -1 },
+  { tag: "EN", prof: 1 },
+  { tag: "EN", prof: 2 }
+];
+/* ニューラル系の音声名。最も自然に聞こえるものを「ネイティブ寄り」に充てる */
+const NATURAL_RE = /natural|neural|online|google|premium|enhanced|siri/i;
+let casualIdx = 0;   // 「普通の喋り言葉」は再生のたびに話者を変える
+
+function setVoice(key) {
+  const name = P && P.settings[key];
+  if (!name) return null;
+  return EN_VOICES.find(v => v.name === name) || null;
 }
+function pickNative() {
+  return setVoice("v1") || EN_VOICES.find(v => NATURAL_RE.test(v.name)) || EN_VOICES[0] || null;
+}
+function pickClear() {
+  const set = setVoice("v2"); if (set) return set;
+  const nat = pickNative();
+  return EN_VOICES.find(v => v !== nat) || nat;
+}
+function pickCasual() {
+  const set = setVoice("v3"); if (set) return set;
+  const used = [pickNative(), pickClear()];
+  const pool = EN_VOICES.filter(v => !used.includes(v));
+  if (!pool.length) return EN_VOICES[EN_VOICES.length - 1] || null;
+  return pool[casualIdx % pool.length];
+}
+function voiceFor(prof) {
+  return prof.key === "v1" ? pickNative() : prof.key === "v2" ? pickClear() : pickCasual();
+}
+/* 音声が1種類しかない端末でも「人による違い」が出るよう抑揚を振る */
+function casualPitch() { return [1.0, 0.9, 1.1][casualIdx % 3]; }
+
 function jaVoice() {
   if (P && P.settings.ja) { const v = JA_VOICES.find(v => v.name === P.settings.ja); if (v) return v; }
   return JA_VOICES[0] || null;
@@ -190,10 +222,11 @@ function speakSeq(items, onAllEnd) {
     const it = items[i++];
     const u = new SpeechSynthesisUtterance(it.text);
     u.lang = it.lang || "en-US"; u.rate = clamp((it.rate || 1) * (P ? P.settings.rate : 1), 0.5, 2);
+    if (it.pitch) u.pitch = clamp(it.pitch, 0.5, 2);
     if (it.voice) { u.voice = it.voice; u.lang = it.voice.lang; }
     if (it.onBoundary) u.onboundary = it.onBoundary;
     if (it.onStart) it.onStart();
-    const go = () => { if (it.onEnd) it.onEnd(); setTimeout(next, 380); };
+    const go = () => { if (it.onEnd) it.onEnd(); setTimeout(next, it.gap == null ? 380 : it.gap); };
     u.onend = go; u.onerror = go;
     speechSynthesis.speak(u);
   };
@@ -205,8 +238,8 @@ function sayBtn(el) {
   const t = el.dataset.t || "";
   if (!t) return;
   if (el.dataset.lang === "ja") { speakOne(t, { voice: jaVoice(), lang: "ja-JP", rate: 1 }); return; }
-  const vi = +(el.dataset.v || 1);
-  const prof = VOICE_PROFILES[vi] || VOICE_PROFILES[1];
+  const vi = +(el.dataset.v || 0);
+  const prof = VOICE_PROFILES[vi] || VOICE_PROFILES[0];
   speakOne(t, { voice: voiceFor(prof), rate: el.dataset.rate ? +el.dataset.rate : prof.rate });
 }
 
@@ -218,6 +251,8 @@ let activeRec = null, recTimer = null, mediaRec = null, mediaStream = null, recC
 
 function stopRec() {
   if (recTimer) { clearTimeout(recTimer); recTimer = null; }
+  if (recTick) { clearInterval(recTick); recTick = null; }
+  if (listenSt) { listenSt.done = true; listenSt = null; }
   if (activeRec) { try { activeRec.abort(); } catch (e) { } activeRec = null; }
   stopMedia();
 }
@@ -226,63 +261,102 @@ function stopMedia() {
   mediaRec = null;
   if (mediaStream) { mediaStream.getTracks().forEach(t => { try { t.stop(); } catch (e) { } }); mediaStream = null; }
 }
-/* 認識 + 同時録音。onDone(transcript, confidence, blob, seconds) */
-async function listenOnce(onDone, onErr) {
+/* 認識 + 同時録音。ユーザーが「喋り終わりました」を押すまで聞き続ける。
+   onDone(transcript, confidence, blob, seconds) / onInterim(text) */
+let listenSt = null, recTick = null;
+
+function startListening(onDone, onErr, onInterim) {
   if (!SR) { if (onErr) onErr("unsupported"); return; }
   stopRec();
   recChunks = []; recStartAt = Date.now();
+  const st = { onDone, onErr, onInterim, finalText: "", conf: 0, confN: 0,
+               userStopped: false, done: false, restarts: 0, rec: null, fatal: null };
+  listenSt = st;
 
-  const rec = new SR();
-  rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
-  let finished = false;
-
-  const finish = (txt, conf) => {
-    if (finished) return; finished = true;
-    const sec = (Date.now() - recStartAt) / 1000;
-    const type = (mediaRec && mediaRec.mimeType) || "audio/webm";
-    const deliver = () => {
-      const blob = recChunks.length ? new Blob(recChunks, { type }) : null;
-      recChunks = [];
-      onDone(txt, conf, blob, sec);
+  const build = () => {
+    const rec = new SR();
+    rec.lang = "en-US"; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.onresult = e => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i], alt = res[0];
+        if (res.isFinal) {
+          st.finalText += (st.finalText ? " " : "") + String(alt.transcript).trim();
+          if (typeof alt.confidence === "number" && alt.confidence > 0) { st.conf += alt.confidence; st.confN++; }
+        } else interim += alt.transcript;
+      }
+      if (st.onInterim) st.onInterim((st.finalText + " " + interim).trim());
     };
-    // dataavailable は stop() 後に発火するため、onstop を待ってから Blob を組み立てる
-    if (mediaRec && mediaRec.state !== "inactive") {
-      mediaRec.onstop = () => { stopMedia(); deliver(); };
-      try { mediaRec.stop(); } catch (e) { stopMedia(); deliver(); }
-    } else { stopMedia(); deliver(); }
+    rec.onerror = e => {
+      if (e.error === "no-speech" || e.error === "aborted") return;   // 黙っていても止めない
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {
+        st.fatal = e.error; st.userStopped = true;
+        try { rec.stop(); } catch (x) { }
+      }
+    };
+    rec.onend = () => {
+      if (st !== listenSt || st.done) return;
+      if (st.userStopped) { finishListening(); return; }
+      // ユーザーがまだ止めていない（無音で切れただけ）→ 聞き直して継続
+      if (st.restarts < 60 && Date.now() - recStartAt < 180000) {
+        st.restarts++;
+        try { st.rec = build(); activeRec = st.rec; st.rec.start(); return; } catch (x) { }
+      }
+      finishListening();
+    };
+    return rec;
   };
 
-  rec.onresult = e => {
-    try { rec.stop(); } catch (err) { }
-    const r = e.results[0][0];
-    finish(r.transcript, typeof r.confidence === "number" ? r.confidence : null);
-  };
-  rec.onerror = e => {
-    if (activeRec === rec) activeRec = null;
-    if (recTimer) { clearTimeout(recTimer); recTimer = null; }
-    if (!finished) { finished = true; stopMedia(); if (onErr) onErr(e.error); }
-  };
-  rec.onend = () => {
-    if (activeRec === rec) activeRec = null;
-    if (recTimer) { clearTimeout(recTimer); recTimer = null; }
-    if (!finished) { finished = true; stopMedia(); if (onErr) onErr(null); }
-  };
+  try { st.rec = build(); activeRec = st.rec; st.rec.start(); }
+  catch (e) { listenSt = null; if (onErr) onErr("start-failed"); return; }
 
-  activeRec = rec;
-  try { rec.start(); } catch (e) { stopMedia(); if (onErr) onErr("start-failed"); return; }
-  recTimer = setTimeout(() => { if (activeRec === rec) { try { rec.stop(); } catch (e) { } } }, 15000);
+  // 3分で強制終了（押し忘れ対策）
+  recTimer = setTimeout(() => { if (listenSt === st) stopListening(); }, 180000);
 
-  // 録音はベストエフォート。認識を妨げないよう開始後に取得する
+  // 録音はベストエフォート（失敗しても認識は続ける）
   if (navigator.mediaDevices && window.MediaRecorder) {
-    try {
-      const st = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (finished || activeRec !== rec) { st.getTracks().forEach(t => { try { t.stop(); } catch (e) { } }); return; }
-      mediaStream = st;
-      mediaRec = new MediaRecorder(st);
-      mediaRec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      if (st !== listenSt || st.done) { stream.getTracks().forEach(t => { try { t.stop(); } catch (x) { } }); return; }
+      mediaStream = stream;
+      mediaRec = new MediaRecorder(stream);
+      mediaRec.ondataavailable = ev => { if (ev.data && ev.data.size) recChunks.push(ev.data); };
       mediaRec.start();
-    } catch (e) { mediaRec = null; }
+    }).catch(() => { mediaRec = null; });
   }
+}
+
+/* ユーザーが「喋り終わりました」を押したとき */
+function stopListening() {
+  const st = listenSt;
+  if (!st || st.done) return;
+  st.userStopped = true;
+  if (st.rec) { try { st.rec.stop(); } catch (e) { finishListening(); } }
+  else finishListening();
+}
+
+function finishListening() {
+  const st = listenSt;
+  if (!st || st.done) return;
+  st.done = true; listenSt = null;
+  if (recTimer) { clearTimeout(recTimer); recTimer = null; }
+  if (recTick) { clearInterval(recTick); recTick = null; }
+  if (activeRec === st.rec) activeRec = null;
+  const sec = (Date.now() - recStartAt) / 1000;
+  const conf = st.confN ? st.conf / st.confN : null;
+  const type = (mediaRec && mediaRec.mimeType) || "audio/webm";
+  const deliver = () => {
+    const blob = recChunks.length ? new Blob(recChunks, { type }) : null;
+    recChunks = [];
+    const txt = st.finalText.trim();
+    if (st.fatal) { if (st.onErr) st.onErr(st.fatal); return; }
+    if (!txt) { if (st.onErr) st.onErr("no-speech"); return; }
+    st.onDone(txt, conf, blob, sec);
+  };
+  // dataavailable は stop() 後に発火するので onstop を待つ
+  if (mediaRec && mediaRec.state !== "inactive") {
+    mediaRec.onstop = () => { stopMedia(); deliver(); };
+    try { mediaRec.stop(); } catch (e) { stopMedia(); deliver(); }
+  } else { stopMedia(); deliver(); }
 }
 
 /* =========================================================
@@ -669,7 +743,7 @@ function renderScenarios() {
 /* =========================================================
    学習画面（STEP 1→2→3）
    ========================================================= */
-let ST = null; // {scenario, idx, phrase, step, v:[done], jaDone, result}
+let ST = null; // {sc, idx, phrase, v:[4セグメント再生済み], result, recKey, hideEn, typing}
 function openScenario(id) {
   const sc = (window.SCENARIOS || []).find(s => s.id === id);
   if (!sc) { toast("シナリオが見つかりません"); return; }
@@ -681,7 +755,7 @@ function studyOne(phraseId) {
   startStudy({ id: "_single", title: "ピンポイント練習", steps: [{ phrase: phraseId, note: "" }], cat: p.cat, level: p.level }, 0);
 }
 function startStudy(sc, idx) {
-  ST = { sc, idx, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null, hideEn: false };
+  ST = { sc, idx, v: [false, false, false, false], result: null, recKey: null, hideEn: false, typing: false };
   go("study");
 }
 function renderStudy() {
@@ -710,50 +784,52 @@ function renderStudy() {
       <div class="bar" style="margin-top:9px"><i style="width:${Math.round(100 * ST.sc.steps.filter(x => phraseDone(x.phrase)).length / total)}%"></i></div>
     </div>
 
-    <!-- ① 英語を聞く -->
+    <!-- ① 聞いて理解する -->
     <div class="card">
       <div class="card-head">
-        <span class="stepno">1</span><span class="t">英語を聞く</span>
+        <span class="stepno">1</span><span class="t">聞いて理解する</span>
         <span class="chip" id="chk1" style="margin-left:auto"></span>
       </div>
       <div class="en-lg ${ST.hideEn ? "masked" : ""}" id="enText" lang="en">${hlPhrase(p)}</div>
-      ${ST.hideEn ? `<div class="note" style="margin-top:4px">英文を隠しています（STEP 3 の練習用）</div>` : ""}
-      <div style="margin-top:11px">
-        ${VOICE_PROFILES.map((v, i) => `
-          <div class="voicecard ${ST.v[i] ? "done" : ""}" id="vc${i}">
-            <button class="vplay" onclick="playVoice(${i})" aria-label="${esc(v.name)}で再生">${ST.v[i] ? "↻" : "▶"}</button>
-            <div class="vmeta"><div class="vname">${esc(v.name)}</div><div class="vdesc">${esc(v.desc)}</div></div>
-            <span class="vcheck">${ST.v[i] ? "✓" : ""}</span>
-          </div>`).join("")}
-      </div>
+      ${ST.hideEn ? `<div class="note" style="margin-top:4px">英文を隠しています（タップで表示）</div>`
+                  : `<div class="ja-sub">${esc(p.ja)}</div>`}
+
       <div class="btnrow">
-        <button class="btn pri" onclick="playAll3()">▶ 3音声を通して再生</button>
+        <button class="btn pri block lg" id="playAllBtn" onclick="playThrough()">▶ 通しで聞く（英 → 日 → 英 → 英）</button>
+      </div>
+
+      <div class="note" style="margin:11px 0 7px">再生順（1つずつ個別に再生もできます）</div>
+      ${SEGMENTS.map((sg, i) => {
+        const prof = sg.prof >= 0 ? VOICE_PROFILES[sg.prof] : null;
+        const nm = prof ? prof.name : "日本語で意味を確認";
+        const ds = prof ? prof.desc : p.ja;
+        return `<div class="seq" id="seq${i}">
+          <span class="no">${i + 1}</span>
+          <button class="play" onclick="playSeg(${i})" aria-label="${esc(nm)}を再生">▶</button>
+          <div class="meta">
+            <div class="nm"><span class="tag ${sg.tag === "JA" ? "ja" : "en"}">${sg.tag}</span>${esc(nm)}</div>
+            <div class="ds">${esc(ds)}</div>
+          </div>
+          <span class="vcheck"></span>
+        </div>`;
+      }).join("")}
+
+      <div class="btnrow">
         <button class="btn ghost" onclick="toggleHideEn()">${ST.hideEn ? "👁 英文を表示" : "🙈 英文を隠す"}</button>
         <button class="btn ghost" onclick="markListenHard()">🤔 聞き取れなかった</button>
       </div>
       ${!ttsAvailable() ? '<div class="banner warn" style="margin-top:10px">この端末は音声合成に対応していません。英文を目で追って進めてください。</div>' : ""}
-    </div>
 
-    <!-- ② 日本語で意味を確認 -->
-    <div class="card">
-      <div class="card-head">
-        <span class="stepno">2</span><span class="t">日本語で意味を確認</span>
-        <span class="chip" id="chk2" style="margin-left:auto"></span>
-      </div>
-      <div style="font-size:1.04rem;font-weight:650;line-height:1.6">${esc(p.ja)}</div>
-      <div class="btnrow">
-        <button class="btn pri" onclick="playJa()">🔊 日本語を聞く</button>
-      </div>
       ${(p.keys || []).length ? `<hr class="divider"><div class="srow"><b>重要表現</b>
         ${p.keys.map((k, i) => `<div style="margin-top:5px"><span class="kw key" data-p="${esc(p.id)}" data-i="${i}" onclick="keySheet(this.dataset.p,+this.dataset.i)">${esc(k.w)}</span> — ${esc(k.mean)}</div>`).join("")}</div>` : ""}
       ${p.situation ? `<div class="srow"><b>使用場面</b>${esc(p.situation)}</div>` : ""}
     </div>
 
-    <!-- ③ 自分で話す -->
+    <!-- ② 自分で話す -->
     <div class="card">
       <div class="card-head">
-        <span class="stepno">3</span><span class="t">自分で話す</span>
-        <span class="chip" id="chk3" style="margin-left:auto"></span>
+        <span class="stepno">2</span><span class="t">自分で話す</span>
+        <span class="chip" id="chk2" style="margin-left:auto"></span>
       </div>
       <div id="speakBody"></div>
     </div>
@@ -765,102 +841,181 @@ function renderStudy() {
         : `<button class="btn ok" style="margin-left:auto" onclick="finishScenario()">シナリオを完了する 🎉</button>`}
     </div>`;
   renderSpeakSection();
-  updateChecks();
+  updateSeqUI();
 }
 
-/* ③ 自分で話す — ここだけ部分更新する（他の操作で入力や採点結果が消えないように） */
+/* ② 自分で話す — ここだけ部分更新する（他の操作で入力や採点結果が消えないように） */
 function renderSpeakSection() {
   const b = $("speakBody"); if (!b || !ST) return;
-  const p = ST.phrase, r = ST.result;
+  const p = ST.phrase, r = ST.result, rec = !!listenSt;
   b.innerHTML = `
-    <div class="note">次の日本語を英語で言ってみましょう。${SR ? "" : "（この端末は音声認識に非対応のため、文字入力で採点します）"}</div>
+    <div class="note">次の日本語を英語で言ってみましょう。${SR ? "話し終わったら「喋り終わりました」を押してください。" : "（この端末は音声認識に非対応のため、文字入力で採点します）"}</div>
     <div style="font-size:1.04rem;font-weight:700;margin:9px 0 2px">「${esc(p.ja)}」</div>
     <div class="micwrap">
-      <button class="micbtn" id="micBtn" onclick="startSpeak()" aria-label="録音して発話を採点する">🎙</button>
-      <div class="note" id="micHint">${SR ? "タップして英語で話してください" : "下の入力欄に英語を入力してください"}</div>
+      <button class="micbtn ${rec ? "rec" : ""}" id="micBtn" onclick="${rec ? "endSpeak()" : "startSpeak()"}"
+        aria-label="${rec ? "録音を終了する" : "録音を開始する"}">${rec ? "●" : "🎙"}</button>
+      <div class="note" id="micHint">${rec ? '<span class="recdot"></span>録音中 <b id="recSec">0</b> 秒'
+        : (SR ? "タップして録音を開始" : "下の入力欄に英語を入力してください")}</div>
     </div>
-    <div class="btnrow" style="justify-content:center">
-      <button class="btn sm ghost" onclick="toggleHideEn()">${ST.hideEn ? "👁 英文を表示" : "🙈 英文を隠して挑戦"}</button>
-      <button class="btn sm ghost" onclick="playVoice(0)" aria-label="お手本の音声を再生">🔊 お手本</button>
-      ${ST.typing || !SR ? "" : `<button class="btn sm ghost" onclick="manualInput()">⌨ 文字で入力</button>`}
-    </div>
-    ${ST.typing || !SR ? `
+    ${rec ? `
+      <div class="btnrow" style="justify-content:center">
+        <button class="btn ok lg block" id="endBtn" onclick="endSpeak()">✅ 喋り終わりました</button>
+      </div>
+      <div class="banner info" id="liveText" lang="en" style="margin-top:10px;min-height:2.8em">聞き取り中…</div>`
+    : `
+      <div class="btnrow" style="justify-content:center">
+        <button class="btn sm ghost" onclick="toggleHideEn()">${ST.hideEn ? "👁 英文を表示" : "🙈 英文を隠して挑戦"}</button>
+        <button class="btn sm ghost" onclick="playSeg(0)" aria-label="お手本の音声を再生">🔊 お手本</button>
+        ${ST.typing || !SR ? "" : `<button class="btn sm ghost" onclick="manualInput()">⌨ 文字で入力</button>`}
+      </div>`}
+    ${(ST.typing || !SR) && !rec ? `
       <div style="margin-top:10px">
         <label class="fld"><span>英語で入力して採点</span>
           <textarea id="typeAns" rows="2" lang="en" placeholder="Type your English here..."></textarea></label>
         <div class="btnrow tight"><button class="btn acc" onclick="submitTyped()">この内容で採点する</button></div>
       </div>` : ""}
-    <div id="scoreArea" aria-live="polite">${r ? scoreHtml(r) : ""}</div>`;
+    <div id="scoreArea" aria-live="polite">${r && !rec ? scoreHtml(r) : ""}</div>`;
 }
 
-/* 3セクションの完了マークを更新 */
+/* 2セクションの完了マークを更新 */
 function updateChecks() {
   if (!ST) return;
-  const labels = { 1: ST.v.filter(Boolean).length + " / 3 再生", 2: "未再生", 3: "未挑戦" };
-  [1, 2, 3].forEach(n => {
-    const el = $("chk" + n); if (!el) return;
-    const done = stepDone(n);
-    el.className = "chip" + (done ? " ok" : "");
-    el.textContent = done ? (n === 1 ? "✓ 3音声すべて" : n === 2 ? "✓ 再生済み" : "✓ " + ST.result.total + "点") : labels[n];
-  });
+  const c1 = $("chk1");
+  if (c1) {
+    const n = ST.v.filter(Boolean).length;
+    const done = n === ST.v.length;
+    c1.className = "chip" + (done ? " ok" : "");
+    c1.textContent = done ? "✓ 通し再生済み" : (playingSeg >= 0 ? "再生中 " + (playingSeg + 1) + " / 4" : n + " / 4 再生");
+  }
+  const c2 = $("chk2");
+  if (c2) {
+    const done = !!ST.result;
+    c2.className = "chip" + (done ? " ok" : "");
+    c2.textContent = done ? "✓ " + ST.result.total + "点" : "未挑戦";
+  }
 }
 function stepDone(n) {
   if (!ST) return false;
-  if (n === 1) return ST.v.every(Boolean);
-  if (n === 2) return ST.jaDone;
-  return !!ST.result;
+  return n === 1 ? ST.v.every(Boolean) : !!ST.result;
 }
 function toggleHideEn() {
   ST.hideEn = !ST.hideEn;
-  const el = $("enText");
-  if (el) el.classList.toggle("masked", !!ST.hideEn);
   renderStudy();
   if (ST.hideEn) { const sb = $("speakBody"); if (sb) sb.scrollIntoView({ behavior: "smooth", block: "center" }); }
 }
 
-function playVoice(i) {
-  const prof = VOICE_PROFILES[i], p = ST.phrase;
+/* ====== 再生（英 → 日 → 英 → 英） ====== */
+let playingSeg = -1, playingAll = false, enSpans = [];
+
+function prepEnSpans() {
   const el = $("enText");
-  let spans = [];
-  if (el && !ST.hideEn) {
-    const toks = p.en.split(/(\s+)/); let pos = 0;
-    el.innerHTML = toks.map(t => { const s = pos; pos += t.length; return /^\s+$/.test(t) || !t ? t : `<span class="pw" data-s="${s}">${esc(t)}</span>`; }).join("");
-    spans = [...el.querySelectorAll(".pw")];
-  }
-  const card = $("vc" + i);
-  document.querySelectorAll(".voicecard").forEach(c => c.classList.remove("playing"));
-  if (card) card.classList.add("playing");
-  speakOne(p.en, {
-    voice: voiceFor(prof), rate: prof.rate,
-    onBoundary: e => { spans.forEach(x => x.classList.remove("w-now")); let t = null; for (const x of spans) if (+x.dataset.s <= e.charIndex) t = x; if (t) t.classList.add("w-now"); },
-    onEnd: () => { finishVoice(i, card, el); }
-  });
+  if (!el || ST.hideEn) return [];
+  const toks = ST.phrase.en.split(/(\s+)/); let pos = 0;
+  el.innerHTML = toks.map(t => {
+    const st = pos; pos += t.length;
+    return /^\s+$/.test(t) || !t ? t : `<span class="pw" data-s="${st}">${esc(t)}</span>`;
+  }).join("");
+  return [...el.querySelectorAll(".pw")];
 }
-/* 再生終了時は画面全体ではなく該当箇所だけ更新する */
-function finishVoice(i, card, el) {
-  if (el && !ST.hideEn) el.innerHTML = hlPhrase(ST.phrase);   // 単語分割を戻して重要表現ハイライトを復元
-  if (card) {
-    card.classList.remove("playing"); card.classList.add("done");
-    const b = card.querySelector(".vplay"); if (b) b.textContent = "↻";
-    const c = card.querySelector(".vcheck"); if (c) c.textContent = "✓";
+function hlAt(charIndex) {
+  enSpans.forEach(x => x.classList.remove("w-now"));
+  let t = null; for (const x of enSpans) if (+x.dataset.s <= charIndex) t = x;
+  if (t) t.classList.add("w-now");
+}
+function clearEnHl() {
+  enSpans.forEach(x => x.classList.remove("w-now"));
+  const el = $("enText");
+  if (el && ST && !ST.hideEn) el.innerHTML = hlPhrase(ST.phrase);
+  enSpans = [];
+}
+
+/* セグメント i の発話アイテム列を作る */
+function segItems(i) {
+  const p = ST.phrase, sg = SEGMENTS[i];
+  if (sg.prof < 0) return [{ text: p.ja, voice: jaVoice(), lang: "ja-JP", rate: 1, seg: i }];
+  const prof = VOICE_PROFILES[sg.prof];
+  const voice = voiceFor(prof);
+  if (prof.mode === "word") {
+    // 語の間にカンマを入れて区切る。発話を分割すると TTS の起動遅延が語数ぶん乗って
+    // 間延びするため、1発話のまま「普通の速さ＋短い区切り」にする。
+    const toks = p.en.split(/\s+/).filter(Boolean);
+    const origAt = []; let pos = 0;
+    toks.forEach(w => { const at = p.en.indexOf(w, pos); origAt.push(at); pos = at + w.length; });
+    const spokenAt = []; let sp = 0;
+    toks.forEach(w => { spokenAt.push(sp); sp += w.length + 2; });
+    return [{
+      text: toks.join(", "), voice, rate: prof.rate, seg: i,
+      onBoundary: e => {
+        let k = 0;
+        for (let j = 0; j < spokenAt.length; j++) if (spokenAt[j] <= e.charIndex) k = j;
+        hlAt(origAt[k]);
+      }
+    }];
   }
-  if (!ST.v[i]) { ST.v[i] = true; pushSkill("listening", 72 + i * 6); save(); }
+  return [{ text: p.en, voice, rate: prof.rate,
+            pitch: sg.prof === 2 ? casualPitch() : 1.0, seg: i,
+            onBoundary: e => hlAt(e.charIndex) }];
+}
+
+function wrapItems(items) {
+  return items.map(it => Object.assign({}, it, {
+    onStart: () => {
+      playingSeg = it.seg;
+      if (it.seg === 1) { enSpans.forEach(x => x.classList.remove("w-now")); }
+      if (!ST.v[it.seg]) { ST.v[it.seg] = true; }
+      if (it.onStart) it.onStart();
+      updateSeqUI();
+    }
+  }));
+}
+
+function playThrough() {
+  if (seqActive) { stopPlayback(); return; }
+  if (!ttsAvailable()) { toast("この端末は音声合成に対応していません"); return; }
+  casualIdx++;
+  playingAll = true;
+  enSpans = prepEnSpans();
+  const items = wrapItems([].concat(segItems(0), segItems(1), segItems(2), segItems(3)));
+  updateSeqUI();
+  speakSeq(items, finishPlayback);
+}
+function playSeg(i) {
+  if (seqActive && playingSeg === i) { stopPlayback(); return; }
+  if (!ttsAvailable()) { toast("この端末は音声合成に対応していません"); return; }
+  if (i === 3) casualIdx++;
+  playingAll = false;
+  enSpans = prepEnSpans();
+  const items = wrapItems(segItems(i));
+  updateSeqUI();
+  speakSeq(items, finishPlayback);
+}
+function finishPlayback() {
+  playingSeg = -1; playingAll = false;
+  clearEnHl();
+  pushSkill("listening", ST.v.every(Boolean) ? 84 : 72);
+  save(); updateSeqUI();
+}
+function stopPlayback() {
+  stopSpeak();
+  playingSeg = -1; playingAll = false;
+  clearEnHl(); updateSeqUI();
+}
+/* 再生行の見た目を更新（画面全体は再描画しない） */
+function updateSeqUI() {
+  if (!ST) return;
+  SEGMENTS.forEach((sg, i) => {
+    const row = $("seq" + i); if (!row) return;
+    const now = playingSeg === i;
+    row.classList.toggle("now", now);
+    row.classList.toggle("done", !!ST.v[i] && !now);
+    const b = row.querySelector(".play"); if (b) b.textContent = now ? "⏸" : ST.v[i] ? "↻" : "▶";
+    const c = row.querySelector(".vcheck"); if (c) c.textContent = now ? "🔊" : ST.v[i] ? "✓" : "";
+  });
+  const mb = $("playAllBtn");
+  if (mb) mb.textContent = (seqActive && playingAll) ? "⏸ 停止" : "▶ 通しで聞く（英 → 日 → 英 → 英）";
   updateChecks();
 }
-function playAll3() {
-  const p = ST.phrase, el = $("enText");
-  speakSeq(VOICE_PROFILES.map((prof, i) => ({
-    text: p.en, voice: voiceFor(prof), rate: prof.rate,
-    onStart: () => { document.querySelectorAll(".voicecard").forEach(c => c.classList.remove("playing")); const c = $("vc" + i); if (c) c.classList.add("playing"); },
-    onEnd: () => { finishVoice(i, $("vc" + i), el); }
-  })), () => { pushSkill("listening", 80); save(); updateChecks(); });
-}
-function playJa() {
-  speakOne(ST.phrase.ja, {
-    voice: jaVoice(), rate: 1, lang: "ja-JP",
-    onEnd: () => { if (!ST.jaDone) { ST.jaDone = true; save(); } updateChecks(); }
-  });
-}
+
 function markListenHard() {
   const id = ST.phrase.id;
   P.weak.listen[id] = (P.weak.listen[id] || 0) + 1;
@@ -870,6 +1025,7 @@ function markListenHard() {
 
 /* ---- STEP3 発話 ---- */
 function manualInput() {
+  if (listenSt) return;
   ST.typing = true; renderSpeakSection();
   setTimeout(() => { const el = $("typeAns"); if (el) el.focus(); }, 60);
 }
@@ -881,20 +1037,33 @@ function submitTyped() {
 }
 function startSpeak() {
   if (!SR) { manualInput(); return; }
-  const btn = $("micBtn"), hint = $("micHint");
-  btn.classList.add("rec"); btn.disabled = true;
-  hint.innerHTML = '<span class="recdot"></span>聞き取り中…　話し終わると自動で止まります';
-  listenOnce(
-    (txt, conf, blob, sec) => {
-      btn.classList.remove("rec"); btn.disabled = false; hint.textContent = "タップして英語で話してください";
-      gradeSpeech(txt, conf, blob, sec);
-    },
+  stopSpeak(); stopPlayback();
+  startListening(
+    (txt, conf, blob, sec) => { renderSpeakSection(); gradeSpeech(txt, conf, blob, sec); },
     err => {
-      btn.classList.remove("rec"); btn.disabled = false;
-      hint.textContent = "タップして英語で話してください";
-      if (err && err !== "aborted" && err !== "no-speech") $("scoreArea").innerHTML = `<div class="banner ng">音声を取得できませんでした（${esc(String(err))}）。マイクの許可をご確認ください。</div>`;
-      else if (err === "no-speech") toast("音声が検出されませんでした");
-    });
+      renderSpeakSection();
+      if (err === "no-speech") toast("音声が聞き取れませんでした。もう一度お試しください");
+      else if (err && err !== "aborted") {
+        const a = $("scoreArea");
+        if (a) a.innerHTML = `<div class="banner ng">音声を取得できませんでした（${esc(String(err))}）。マイクの許可をご確認ください。</div>`;
+      }
+    },
+    txt => { const el = $("liveText"); if (el) el.textContent = txt || "聞き取り中…"; }
+  );
+  renderSpeakSection();
+  // 録音中の経過秒を表示
+  if (recTick) clearInterval(recTick);
+  recTick = setInterval(() => {
+    const el = $("recSec");
+    if (!el || !listenSt) { clearInterval(recTick); recTick = null; return; }
+    el.textContent = Math.floor((Date.now() - recStartAt) / 1000);
+  }, 500);
+}
+/* 「喋り終わりました」 */
+function endSpeak() {
+  const h = $("micHint"); if (h) h.textContent = "解析中…";
+  const b = $("endBtn"); if (b) { b.disabled = true; b.textContent = "解析中…"; }
+  stopListening();
 }
 async function gradeSpeech(txt, conf, blob, sec) {
   const p = ST.phrase;
@@ -951,9 +1120,9 @@ function scoreHtml(r) {
       <div class="en-md" style="margin-top:4px" lang="en">${esc(r.advice.text)}</div>
       <button class="btn sm" style="margin-top:6px" data-t="${esc(r.advice.text)}" data-v="0" data-rate="0.9" onclick="sayBtn(this)" aria-label="改善英文を再生">🔊 この言い方を聞く</button>
       ${r.advice.also ? `<div class="note" style="margin-top:7px">もう一つの言い方：<span lang="en">${esc(r.advice.also)}</span>
-        <button class="btn sm ghost" data-t="${esc(r.advice.also)}" data-v="1" onclick="sayBtn(this)" aria-label="別の言い方を再生">🔊</button></div>` : ""}
+        <button class="btn sm ghost" data-t="${esc(r.advice.also)}" data-v="0" onclick="sayBtn(this)" aria-label="別の言い方を再生">🔊</button></div>` : ""}
     </div>
-    ${(ST.phrase.alts || []).length ? `<div class="srow"><b>別の言い方</b>${ST.phrase.alts.map(a => `<div style="margin-top:3px">・${esc(a)} <button class="btn sm ghost" data-t="${esc(a)}" data-v="1" onclick="sayBtn(this)">🔊</button></div>`).join("")}</div>` : ""}
+    ${(ST.phrase.alts || []).length ? `<div class="srow"><b>別の言い方</b>${ST.phrase.alts.map(a => `<div style="margin-top:3px">・${esc(a)} <button class="btn sm ghost" data-t="${esc(a)}" data-v="0" onclick="sayBtn(this)">🔊</button></div>`).join("")}</div>` : ""}
     ${ST.recKey ? `<div class="srow"><b>自分の録音</b><button class="btn sm" onclick="playRec('${ST.recKey}')">▶ 聞き返す</button></div>` : ""}
     <div class="note" style="margin-top:9px">※採点は端末内の簡易アルゴリズム（単語一致・語順・話速・表現の丁寧さ）による参考値です。</div>
     <div class="btnrow">
@@ -982,13 +1151,13 @@ async function playRec(key) {
 function prevPhrase() {
   if (!ST || ST.idx <= 0) return;
   const keep = ST.hideEn;
-  ST = { sc: ST.sc, idx: ST.idx - 1, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null, hideEn: keep };
+  ST = { sc: ST.sc, idx: ST.idx - 1, v: [false, false, false, false], result: null, recKey: null, hideEn: keep, typing: false };
   renderStudy(); window.scrollTo(0, 0);
 }
 function nextPhrase() {
   if (ST.idx < ST.sc.steps.length - 1) {
     const keep = ST.hideEn;
-    ST = { sc: ST.sc, idx: ST.idx + 1, step: 1, v: [false, false, false], jaDone: false, result: null, recKey: null, hideEn: keep };
+    ST = { sc: ST.sc, idx: ST.idx + 1, v: [false, false, false, false], result: null, recKey: null, hideEn: keep, typing: false };
     renderStudy(); window.scrollTo(0, 0);
   }
   else finishScenario();
@@ -1095,7 +1264,7 @@ function renderQuiz() {
       ${answered ? `
         <hr class="divider">
         <div class="srow"><b>正解</b>${hlPhrase(q)}
-          <button class="btn sm" style="margin-top:6px" data-t="${esc(q.en)}" data-v="1" onclick="sayBtn(this)">🔊 再生</button></div>
+          <button class="btn sm" style="margin-top:6px" data-t="${esc(q.en)}" data-v="0" onclick="sayBtn(this)">🔊 再生</button></div>
         <div class="srow"><b>意味</b>${esc(q.ja)}</div>
         <div class="btnrow">
           <button class="btn acc" onclick="nextQuiz()">次の問題 →</button>
@@ -1110,7 +1279,7 @@ function answerQuiz(id) {
   if (ok) { rvHit++; t.correct++; pushSkill("vocabulary", 88); }
   else { P.weak.phrases[rvQ.q.id] = (P.weak.phrases[rvQ.q.id] || 0) + 1; pushSkill("vocabulary", 42); }
   save(); renderQuiz();
-  if (ok) speakOne(rvQ.q.en, { voice: voiceFor(VOICE_PROFILES[1]) });
+  if (ok) speakOne(rvQ.q.en, { voice: voiceFor(VOICE_PROFILES[0]) });
 }
 function renderRecordings() {
   $("v-review").innerHTML = `
@@ -1127,7 +1296,7 @@ function renderRecordings() {
         <div style="font-size:.9rem;font-weight:600">${esc(p ? p.en : "(削除されたフレーズ)")}</div>
         <div class="btnrow tight">
           <button class="btn sm pri" onclick="playRec('${r.id}')">▶ 自分の発話</button>
-          ${p ? `<button class="btn sm" data-t="${esc(p.en)}" data-v="1" onclick="sayBtn(this)">🔊 お手本</button>
+          ${p ? `<button class="btn sm" data-t="${esc(p.en)}" data-v="0" onclick="sayBtn(this)">🔊 お手本</button>
                  <button class="btn sm ghost" onclick="studyOne('${p.id}')">練習する</button>` : ""}
         </div>
       </div>`;
@@ -1173,7 +1342,7 @@ function renderPhrases() {
           <div class="ja-sub">${esc(p.ja)}</div>
           <div class="btnrow tight">
             <button class="btn sm pri" data-t="${esc(p.en)}" data-v="0" data-rate=".85" onclick="sayBtn(this)">🔊 ゆっくり</button>
-            <button class="btn sm" data-t="${esc(p.en)}" data-v="1" onclick="sayBtn(this)">🔊 自然速度</button>
+            <button class="btn sm" data-t="${esc(p.en)}" data-v="2" onclick="sayBtn(this)">🔊 普通の喋り</button>
             <button class="btn sm ghost" data-t="${esc(p.ja)}" data-lang="ja" onclick="sayBtn(this)">🔊 和訳</button>
             <button class="btn sm ghost" onclick="studyOne('${p.id}')">練習</button>
           </div>
@@ -1192,7 +1361,7 @@ function wordSheet(key) {
   openSheet(`
     <h3><span class="kw t${w.t}">${esc(key)}</span><span class="chip">${tierName}</span></h3>
     <div class="srow"><b>意味</b>${esc(w.mean)}</div>
-    <div class="srow"><b>使用例</b>${esc(w.ex)} <button class="btn sm" data-t="${esc(w.ex)}" data-v="1" onclick="sayBtn(this)">🔊</button></div>
+    <div class="srow"><b>使用例</b>${esc(w.ex)} <button class="btn sm" data-t="${esc(w.ex)}" data-v="0" onclick="sayBtn(this)">🔊</button></div>
     <div class="srow"><b>使われ方</b>${esc(w.use)}</div>
     ${used.length ? `<div class="srow"><b>この語を含む例文</b>${used.map(p => `<div style="margin-top:4px">・${esc(p.en)}</div>`).join("")}</div>` : ""}
     <div class="btnrow"><button class="btn pri" data-t="${esc(key)}" data-v="0" data-rate=".8" onclick="sayBtn(this)">🔊 発音</button>
@@ -1211,7 +1380,7 @@ function keySheet(phraseId, i) {
     ${(p.alts || []).length ? `<div class="srow"><b>別の言い方</b>${p.alts.map(a => `<div style="margin-top:3px">・${esc(a)}</div>`).join("")}</div>` : ""}
     <div class="btnrow">
       <button class="btn pri" data-t="${esc(k.w)}" data-v="0" data-rate=".8" onclick="sayBtn(this)">🔊 ${esc(k.w)}</button>
-      <button class="btn" data-t="${esc(p.en)}" data-v="1" onclick="sayBtn(this)">🔊 文全体</button>
+      <button class="btn" data-t="${esc(p.en)}" data-v="0" onclick="sayBtn(this)">🔊 文全体</button>
       <button class="btn ghost" onclick="closeSheet()">閉じる</button></div>`);
 }
 
@@ -1330,8 +1499,8 @@ function rpNext() {
   if (RP.kind === "script") {
     chat.insertAdjacentHTML("beforeend", `<div class="msg ai">${hlTier(t.ai)}
       ${P.settings.showJa && t.ja ? `<div class="jah">${esc(t.ja)}</div>` : ""}
-      <div class="btnrow tight"><button class="btn sm ghost" data-t="${esc(t.ai)}" data-v="1" onclick="sayBtn(this)">🔊</button></div></div>`);
-    speakOne(t.ai, { voice: voiceFor(VOICE_PROFILES[1]) });
+      <div class="btnrow tight"><button class="btn sm ghost" data-t="${esc(t.ai)}" data-v="0" onclick="sayBtn(this)">🔊</button></div></div>`);
+    speakOne(t.ai, { voice: voiceFor(VOICE_PROFILES[0]) });
   } else {
     chat.insertAdjacentHTML("beforeend", `<div class="msg ai"><b style="font-size:.76rem;opacity:.8">お題</b><div>${esc(t.ja)}</div>
       ${t.hint ? `<div class="jah">🎯 ${esc(t.hint)}</div>` : ""}</div>`);
@@ -1347,17 +1516,23 @@ function rpNext() {
   chat.scrollIntoView(false);
 }
 function rpMic() {
-  const b = $("rpMic"); b.innerHTML = '<span class="recdot"></span>聞き取り中…'; b.disabled = true;
-  listenOnce((txt) => { $("rpAns").value = txt; b.disabled = false; b.textContent = "🎙 音声で応答"; },
-    () => { const bb = $("rpMic"); if (bb) { bb.disabled = false; bb.textContent = "🎙 音声で応答"; } });
+  const b = $("rpMic"); if (!b) return;
+  if (listenSt) { stopListening(); return; }          // 2回目のタップで終了
+  b.innerHTML = '<span class="recdot"></span>喋り終わったらもう一度タップ';
+  startListening(
+    txt => { const a = $("rpAns"); if (a) a.value = txt; rpMicReset(); },
+    err => { rpMicReset(); if (err === "no-speech") toast("音声が聞き取れませんでした"); },
+    txt => { const a = $("rpAns"); if (a) a.value = txt; }
+  );
 }
+function rpMicReset() { const b = $("rpMic"); if (b) { b.disabled = false; b.textContent = "🎙 音声で応答"; } }
 function rpShowSample() {
   const t = RP.turns[RP.i];
   openSheet('<h3>模範例</h3>'
     + '<div class="srow"><b>英語</b><div class="en-md" lang="en">' + esc(t.sample) + '</div></div>'
     + (t.hint ? '<div class="srow"><b>ねらい</b>' + esc(t.hint) + '</div>' : "")
     + '<div class="btnrow">'
-    + '<button class="btn pri" data-t="' + esc(t.sample) + '" data-v="1" onclick="sayBtn(this)" aria-label="模範例を再生">🔊 聞く</button>'
+    + '<button class="btn pri" data-t="' + esc(t.sample) + '" data-v="0" onclick="sayBtn(this)" aria-label="模範例を再生">🔊 聞く</button>'
     + '<button class="btn" onclick="rpCopySample()">入力欄に写す</button>'
     + '<button class="btn ghost" onclick="closeSheet()">閉じる</button></div>');
 }
@@ -1406,16 +1581,16 @@ function showLogs() {
    ========================================================= */
 function renderSettings() {
   const st = P.settings;
-  const vopt = (sel, want) => EN_VOICES.map(v => {
+  const vopt = (sel) => EN_VOICES.map(v => {
     const g = guessGender(v);
     return `<option value="${esc(v.name)}" ${v.name === sel ? "selected" : ""}>${esc(v.name)}（${esc(v.lang)}${g ? "・" + (g === "male" ? "男" : "女") : ""}）</option>`;
   }).join("");
   $("v-settings").innerHTML = `
     <h2 class="sec">音声</h2>
-    ${VOICE_PROFILES.map(v => `
-      <div class="setrow"><span>${esc(v.name.split("—")[0].trim())}<br><small class="mute" style="font-weight:400">${esc(v.desc)}</small></span>
+    ${VOICE_PROFILES.map((v, i) => `
+      <div class="setrow"><span>${i + 1}. ${esc(v.short)}<br><small class="mute" style="font-weight:400">${esc(v.desc)}</small></span>
         <select onchange="P.settings.${v.key}=this.value;save()">
-          <option value="">自動選択</option>${vopt(st[v.key], v.want)}
+          <option value="">自動選択</option>${vopt(st[v.key])}
         </select></div>`).join("")}
     <div class="setrow"><span>日本語音声</span>
       <select onchange="P.settings.ja=this.value;save()">
@@ -1425,7 +1600,7 @@ function renderSettings() {
     <div class="setrow"><span>全体の速度 <b id="rateV">${st.rate.toFixed(1)}×</b></span>
       <input type="range" min="0.7" max="1.4" step="0.1" value="${st.rate}"
         oninput="P.settings.rate=+this.value;document.getElementById('rateV').textContent=(+this.value).toFixed(1)+'×';save()"></div>
-    <div class="btnrow"><button class="btn pri" onclick="testVoices()">🔊 3音声＋和訳をテスト再生</button></div>
+    <div class="btnrow"><button class="btn pri" onclick="testVoices()">🔊 通し再生をテスト（英→日→英→英）</button></div>
 
     <h2 class="sec">表示</h2>
     <div class="setrow"><span>日本語訳の表示</span>
@@ -1462,8 +1637,13 @@ function setFs(f) { P.settings.fs = f; save(); applySettings(); renderSettings()
 function testVoices() {
   const en = "Have you confirmed the license cost with the site that will be charged?";
   const ja = "課金先の拠点とライセンス費用を確認しましたか？";
-  const items = VOICE_PROFILES.map(v => ({ text: en, voice: voiceFor(v), rate: v.rate }));
-  items.push({ text: ja, voice: jaVoice(), lang: "ja-JP", rate: 1 });
+  casualIdx++;
+  const items = [
+    { text: en, voice: pickNative(), rate: VOICE_PROFILES[0].rate },
+    { text: ja, voice: jaVoice(), lang: "ja-JP", rate: 1 },
+    { text: en.split(/\s+/).filter(Boolean).join(", "), voice: pickClear(), rate: VOICE_PROFILES[1].rate },
+    { text: en, voice: pickCasual(), rate: VOICE_PROFILES[2].rate, pitch: casualPitch() }
+  ];
   speakSeq(items);
 }
 

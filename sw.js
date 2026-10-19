@@ -1,4 +1,4 @@
-const CACHE = "met-v2";
+const CACHE = "met-a1c966ad";
 const ASSETS = ["./", "./index.html", "./app.css", "./app.js", "./data.js", "./data-a.js", "./data-b.js",
                 "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
