@@ -1452,7 +1452,7 @@ let RP = null;
 function renderRoleplayMenu() {
   const RL = window.ROLEPLAYS || {};
   $("v-roleplay").innerHTML = `
-    <div class="banner info">会議の流れを英語だけで通す練習です。各ターンに日本語のヒントと模範解答が付きます。</div>
+    <div class="banner info">会話全体を最初から表示します。相手の発言は音声で聞き、自分の番は模範例を見ながら声に出して練習します。</div>
     ${Object.entries(RL).map(([k, v]) => `
       <button class="tile" onclick="startRoleplay('${k}')">
         <span class="ic">${v.icon || "🤝"}</span>
@@ -1467,101 +1467,182 @@ function renderRoleplayMenu() {
 }
 function startRoleplay(key) {
   const rp = (window.ROLEPLAYS || {})[key]; if (!rp) return;
-  RP = { def: rp, turns: rp.turns, i: 0, log: { mode: rp.name, at: Date.now(), items: [] }, kind: "script" };
-  renderRP();
+  RP = { def: rp, turns: rp.turns, kind: "script",
+         scores: new Array(rp.turns.length).fill(null), said: new Array(rp.turns.length).fill(""),
+         saved: false };
+  go("roleplay"); renderRP();
 }
 function startRoleplayFromScenario(id) {
   const sc = (window.SCENARIOS || []).find(s => s.id === id); if (!sc) return;
   const turns = sc.steps.map(st => {
-    const p = PH_BY_ID[st.phrase];
-    return p ? { ai: st.note || "次の内容を英語で伝えてください", ja: p.ja, hint: st.note || "", sample: p.en } : null;
+    const ph = PH_BY_ID[st.phrase];
+    return ph ? { ai: "", ja: ph.ja, hint: st.note || "", sample: ph.en } : null;
   }).filter(Boolean);
   if (!turns.length) { toast("このシナリオは通し練習に対応していません"); return; }
-  RP = { def: { name: sc.title, desc: sc.desc || "" }, turns, i: 0, log: { mode: sc.title, at: Date.now(), items: [] }, kind: "scenario" };
+  RP = { def: { name: sc.title, desc: sc.desc || "" }, turns, kind: "scenario",
+         scores: new Array(turns.length).fill(null), said: new Array(turns.length).fill(""),
+         saved: false };
   go("roleplay"); renderRP();
 }
+
+/* 会話を最初から全部表示する。相手の発言＝聞く、自分の番＝模範例を見ながら話す */
 function renderRP() {
+  if (!RP) { renderRoleplayMenu(); return; }
   $("v-roleplay").innerHTML = `
     <button class="back" onclick="RP=null;go('roleplay')">← ロールプレイ一覧</button>
-    <div class="card">
-      <div class="chips"><span class="chip cat">${esc(RP.def.name)}</span><span class="chip" id="rpProg">ターン 1 / ${RP.turns.length}</span></div>
-      <div class="note" style="margin-top:6px">${esc(RP.def.desc || "")}</div>
-      <div class="chat" id="rpChat"></div>
-      <div id="rpInput"></div>
+    <div class="card pad-s" style="margin-bottom:11px">
+      <div class="chips">
+        <span class="chip cat">${esc(RP.def.name)}</span>
+        <span class="chip" id="rpProg"></span>
+      </div>
+      ${RP.def.desc ? `<div class="note" style="margin-top:6px">${esc(RP.def.desc)}</div>` : ""}
+      <div class="btnrow">
+        <button class="btn pri block lg" id="rpPlayBtn" onclick="rpPlayAll()">▶ 会話を通して聞く</button>
+      </div>
+      <div class="note" style="margin-top:8px">
+        ${SR ? "自分の番は「🎙 話す」を押して、模範例を見ながら英語で言ってみましょう。話し終わったらもう一度押します。"
+             : "この端末は音声認識に非対応のため、自分の番は「⌨ 入力」で採点します。"}
+      </div>
+    </div>
+    <div id="rpScript">${RP.turns.map((t, i) => rpTurnHtml(t, i)).join("")}</div>
+    <div class="btnrow" style="margin-bottom:6px">
+      <button class="btn ghost" onclick="RP=null;go('roleplay')">一覧へ戻る</button>
+      <button class="btn ok" style="margin-left:auto" onclick="rpSaveLog()">会話ログに保存</button>
     </div>`;
-  rpNext();
+  updateRpProgress();
 }
-function rpNext() {
-  if (RP.i >= RP.turns.length) return rpFinish();
-  const t = RP.turns[RP.i];
-  $("rpProg").textContent = `ターン ${RP.i + 1} / ${RP.turns.length}`;
-  const chat = $("rpChat");
-  if (RP.kind === "script") {
-    chat.insertAdjacentHTML("beforeend", `<div class="msg ai">${hlTier(t.ai)}
-      ${P.settings.showJa && t.ja ? `<div class="jah">${esc(t.ja)}</div>` : ""}
-      <div class="btnrow tight"><button class="btn sm ghost" data-t="${esc(t.ai)}" data-v="0" onclick="sayBtn(this)">🔊</button></div></div>`);
-    speakOne(t.ai, { voice: voiceFor(VOICE_PROFILES[0]) });
-  } else {
-    chat.insertAdjacentHTML("beforeend", `<div class="msg ai"><b style="font-size:.76rem;opacity:.8">お題</b><div>${esc(t.ja)}</div>
-      ${t.hint ? `<div class="jah">🎯 ${esc(t.hint)}</div>` : ""}</div>`);
-  }
-  $("rpInput").innerHTML = `
-    ${t.hint && RP.kind === "script" ? `<div class="note">💡 ヒント：${esc(t.hint)}</div>` : ""}
-    <textarea id="rpAns" rows="2" placeholder="英語で応答…"></textarea>
-    <div class="btnrow">
-      <button class="btn pri" onclick="rpReply()">送信</button>
-      ${SR ? `<button class="btn" id="rpMic" onclick="rpMic()">🎙 音声で応答</button>` : ""}
-      <button class="btn ghost" onclick="rpShowSample()">模範例を見る</button>
+
+function rpTurnHtml(t, i) {
+  const hasAi = !!(t.ai && String(t.ai).trim());
+  return `
+    <div class="turn" id="rpturn${i}">
+      ${hasAi ? `
+        <div class="msg ai" id="rpai${i}">
+          <div class="who">🤖 相手</div>
+          <div lang="en">${hlTier(t.ai)}</div>
+          ${P.settings.showJa && t.ja ? `<div class="jah">${esc(t.ja)}</div>` : ""}
+          <div class="btnrow tight">
+            <button class="btn sm ghost" data-t="${esc(t.ai)}" data-v="0" onclick="sayBtn(this)" aria-label="相手の発言を再生">🔊 聞く</button>
+          </div>
+        </div>` : ""}
+      <div class="msg me" id="rpme${i}">
+        <div class="who">🙋 あなた${t.hint ? "｜" + esc(t.hint) : ""}</div>
+        <div lang="en" style="margin-top:3px">${esc(t.sample)}</div>
+        ${!hasAi && t.ja ? `<div class="jah">${esc(t.ja)}</div>` : ""}
+      </div>
+      <div class="turnact">
+        <button class="btn sm" data-t="${esc(t.sample)}" data-v="1" data-rate="0.95" onclick="sayBtn(this)" aria-label="模範例を再生">🔊 お手本</button>
+        ${SR ? `<button class="btn sm acc" id="rpmic${i}" onclick="rpSpeak(${i})">🎙 話す</button>`
+             : `<button class="btn sm acc" onclick="rpType(${i})">⌨ 入力</button>`}
+        ${SR ? `<button class="btn sm ghost" onclick="rpType(${i})">⌨ 入力</button>` : ""}
+      </div>
+      <div id="rpres${i}">${RP.scores[i] != null ? rpResultHtml(i) : ""}</div>
     </div>`;
-  chat.scrollIntoView(false);
 }
-function rpMic() {
-  const b = $("rpMic"); if (!b) return;
-  if (listenSt) { stopListening(); return; }          // 2回目のタップで終了
-  b.innerHTML = '<span class="recdot"></span>喋り終わったらもう一度タップ';
+
+function rpResultHtml(i) {
+  const sc = RP.scores[i], said = RP.said[i] || "";
+  const cls = sc >= 80 ? "ok" : sc >= 60 ? "warn" : "ng";
+  return `<div class="turnres">
+    <span class="chip ${cls}">${sc}点</span>
+    <span class="said" lang="en">「${esc(said)}」</span>
+  </div>`;
+}
+
+function updateRpProgress() {
+  const el = $("rpProg"); if (!el || !RP) return;
+  const done = RP.scores.filter(x => x != null).length;
+  el.className = "chip" + (done === RP.turns.length ? " ok" : "");
+  el.textContent = `自分の番 ${done} / ${RP.turns.length}`;
+  if (done === RP.turns.length && !RP.saved) rpSaveLog(true);
+}
+
+/* ---- 通して聞く ---- */
+function rpPlayAll() {
+  if (seqActive) { stopSpeak(); rpClearFocus(); rpUpdatePlayBtn(); return; }
+  if (!ttsAvailable()) { toast("この端末は音声合成に対応していません"); return; }
+  const items = [];
+  RP.turns.forEach((t, i) => {
+    if (t.ai && String(t.ai).trim()) {
+      items.push({ text: t.ai, voice: pickNative(), rate: 1.0, onStart: () => rpFocus("rpai" + i) });
+    }
+    items.push({ text: t.sample, voice: pickClear(), rate: 0.97, onStart: () => rpFocus("rpme" + i) });
+  });
+  speakSeq(items, () => { rpClearFocus(); rpUpdatePlayBtn(); });
+  rpUpdatePlayBtn();
+}
+function rpFocus(id) {
+  document.querySelectorAll(".msg.playing").forEach(e => e.classList.remove("playing"));
+  const el = $(id); if (el) { el.classList.add("playing"); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+}
+function rpClearFocus() { document.querySelectorAll(".msg.playing").forEach(e => e.classList.remove("playing")); }
+function rpUpdatePlayBtn() {
+  const b = $("rpPlayBtn"); if (b) b.textContent = seqActive ? "⏸ 停止" : "▶ 会話を通して聞く";
+}
+
+/* ---- 自分の番を話す（手動終了） ---- */
+function rpSpeak(i) {
+  if (listenSt) { stopListening(); return; }
+  stopSpeak(); rpClearFocus();
+  const b = $("rpmic" + i);
+  if (b) { b.classList.remove("acc"); b.classList.add("ng"); b.innerHTML = '<span class="recdot"></span>喋り終わりました'; }
+  const res = $("rpres" + i);
+  if (res) res.innerHTML = `<div class="banner info" id="rplive${i}" lang="en" style="margin-top:6px">聞き取り中…</div>`;
   startListening(
-    txt => { const a = $("rpAns"); if (a) a.value = txt; rpMicReset(); },
-    err => { rpMicReset(); if (err === "no-speech") toast("音声が聞き取れませんでした"); },
-    txt => { const a = $("rpAns"); if (a) a.value = txt; }
+    (txt, conf, blob, sec) => rpScore(i, txt, conf, sec),
+    err => { rpResetMic(i); if (err === "no-speech") toast("音声が聞き取れませんでした"); },
+    txt => { const el = $("rplive" + i); if (el) el.textContent = txt || "聞き取り中…"; }
   );
 }
-function rpMicReset() { const b = $("rpMic"); if (b) { b.disabled = false; b.textContent = "🎙 音声で応答"; } }
-function rpShowSample() {
-  const t = RP.turns[RP.i];
-  openSheet('<h3>模範例</h3>'
-    + '<div class="srow"><b>英語</b><div class="en-md" lang="en">' + esc(t.sample) + '</div></div>'
-    + (t.hint ? '<div class="srow"><b>ねらい</b>' + esc(t.hint) + '</div>' : "")
-    + '<div class="btnrow">'
-    + '<button class="btn pri" data-t="' + esc(t.sample) + '" data-v="0" onclick="sayBtn(this)" aria-label="模範例を再生">🔊 聞く</button>'
-    + '<button class="btn" onclick="rpCopySample()">入力欄に写す</button>'
-    + '<button class="btn ghost" onclick="closeSheet()">閉じる</button></div>');
+function rpResetMic(i) {
+  const b = $("rpmic" + i);
+  if (b) { b.classList.remove("ng"); b.classList.add("acc"); b.textContent = "🎙 話す"; }
+  const res = $("rpres" + i);
+  if (res) res.innerHTML = RP.scores[i] != null ? rpResultHtml(i) : "";
 }
-function rpCopySample() {
-  const el = $("rpAns"); if (el) el.value = RP.turns[RP.i].sample;
-  closeSheet();
+function rpType(i) {
+  if (listenSt) return;
+  const res = $("rpres" + i); if (!res) return;
+  res.innerHTML = `
+    <div style="margin-top:7px">
+      <textarea id="rptype${i}" rows="2" lang="en" placeholder="Type your English here..."></textarea>
+      <div class="btnrow tight"><button class="btn sm acc" onclick="rpTypeSubmit(${i})">この内容で採点</button>
+        <button class="btn sm ghost" onclick="rpResetMic(${i})">やめる</button></div>
+    </div>`;
+  setTimeout(() => { const el = $("rptype" + i); if (el) el.focus(); }, 60);
 }
-function rpReply() {
-  const ans = ($("rpAns").value || "").trim();
-  if (!ans) { toast("英語で応答を入力してください"); return; }
-  const t = RP.turns[RP.i];
-  const r = evaluate(t.sample, ans, null, Math.max(1.5, words(ans).length / 2.2), null, null);
-  RP.log.items.push({ ai: RP.kind === "script" ? t.ai : t.ja, me: ans, sample: t.sample, score: r.total });
-  const t2 = sessToday(); t2.utter++; t2.total++; if (r.total >= 70) t2.correct++;
-  pushSkill("speaking", r.accuracy); pushSkill("fluency", r.fluency); save();
-  $("rpChat").insertAdjacentHTML("beforeend", `<div class="msg me">${esc(ans)}
-    <div class="sample" style="color:#cfe0ff">📝 模範例：${esc(t.sample)}（一致度 ${r.total}）</div></div>`);
-  RP.i++; $("rpInput").innerHTML = "";
-  setTimeout(rpNext, 700);
+function rpTypeSubmit(i) {
+  const el = $("rptype" + i); if (!el) return;
+  const t = (el.value || "").trim();
+  if (!t) { toast("英語で入力してください"); return; }
+  rpScore(i, t, null, Math.max(1.5, words(t).length / 2.2));
 }
-function rpFinish() {
-  const avg = RP.log.items.length ? Math.round(RP.log.items.reduce((a, b) => a + b.score, 0) / RP.log.items.length) : 0;
-  RP.log.avg = avg;
-  P.logs.unshift(RP.log); while (P.logs.length > 30) P.logs.pop(); save();
-  $("rpInput").innerHTML = `
-    <div class="banner ok">🎉 完了！平均一致度 ${avg} 点。会話ログに保存しました。</div>
-    <div class="btnrow"><button class="btn pri" onclick="RP=null;go('roleplay')">一覧へ</button>
-      <button class="btn ghost" onclick="showLogs()">ログを見る</button></div>`;
+function rpScore(i, txt, conf, sec) {
+  const t = RP.turns[i];
+  const r = evaluate(t.sample, txt, null, sec, conf, null);
+  RP.scores[i] = r.total; RP.said[i] = txt;
+  const sess = sessToday();
+  sess.utter++; sess.total++; if (r.total >= 70) sess.correct++;
+  pushSkill("speaking", r.accuracy); pushSkill("fluency", r.fluency);
+  save();
+  rpResetMic(i);
+  updateRpProgress();
 }
+
+function rpSaveLog(auto) {
+  if (!RP) return;
+  const items = RP.turns.map((t, i) => ({
+    ai: t.ai || t.ja || "", me: RP.said[i] || "(未挑戦)", sample: t.sample, score: RP.scores[i] == null ? 0 : RP.scores[i]
+  }));
+  const got = RP.scores.filter(x => x != null);
+  const avg = got.length ? Math.round(got.reduce((a, b) => a + b, 0) / got.length) : 0;
+  P.logs.unshift({ mode: RP.def.name, at: Date.now(), items, avg });
+  while (P.logs.length > 30) P.logs.pop();
+  RP.saved = true;
+  save();
+  toast(auto ? `全ターン完了！ 平均 ${avg} 点で保存しました` : `会話ログに保存しました（平均 ${avg} 点）`);
+}
+
 function showLogs() {
   $("v-roleplay").innerHTML = `
     <button class="back" onclick="go('roleplay')">← ロールプレイ一覧</button>

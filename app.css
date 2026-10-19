@@ -400,3 +400,14 @@ label.fld > span{display:block; font-size:.78rem; color:var(--text-sub); margin-
 .btn.block.lg{display:flex; width:100%}
 .micbtn.rec{background:var(--ng)}
 #liveText{word-break:break-word}
+
+/* ===== ロールプレイ台本 ===== */
+.turn{margin-bottom:16px}
+.turn .msg{max-width:100%; margin-bottom:5px}
+.turn .msg.ai{background:var(--surface); border:1px solid var(--line)}
+.turn .msg .who{font-size:.7rem; font-weight:700; opacity:.72; margin-bottom:2px}
+.turn .msg.playing{outline:2px solid var(--accent); outline-offset:1px}
+.turnact{display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; margin-top:4px}
+.turnres{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; justify-content:flex-end}
+.turnres .said{font-size:.78rem; color:var(--text-sub); word-break:break-word}
+#rpScript .msg.me{align-self:stretch}
